@@ -1,16 +1,18 @@
-#%%
+# %%
 import pyspark
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, to_timestamp, date_format, hour
-from pyspark.sql.types import StructType, StructField, StringType, DoubleType, IntegerType, DateType, TimestampType, LongType
+from pyspark.sql.types import StructType, StructField, StringType, DoubleType, IntegerType, DateType, TimestampType, \
+    LongType
+
 path = "/Users/madslun/Documents/Fag:Programmering/TrafficAnnouncementsAutomation/output-3-10-.csv"
 
-#%%
+# %%
 data_schema = StructType(fields=[
     StructField("Author_id", IntegerType()),
     StructField("Tweet_id", LongType()),
     StructField("Text", StringType()),
-    StructField("Refrenced_tweet", LongType()),
+    StructField("Referenced_tweet", LongType()),
     StructField("Referenced_type", StringType()),
     StructField("Referenced_user", StringType()),
     StructField("Created_at", StringType())
@@ -18,28 +20,27 @@ data_schema = StructType(fields=[
 
 spark = SparkSession.builder.appName("TAA").getOrCreate()
 
-
 df = spark.read.schema(data_schema).option("header", "true").option("multiline", "true").csv(path=path)
 
-#%%
+# %%
 
 df.limit(5).show()
 
-#%%
+# %%
 
 # Checking for null values
 df.where(col("Tweet_id").isNotNull()).count()
 
-#%%
+# %%
 # Convert to CET/local timezone
 df = df.withColumn("Created_at_local", date_format(col(("Created_at")), "yyyy-MM-dd HH:mm:ss.SSSX"))
 
-#%%
+# %%
 # Get the hour distribution
 hours = df.groupby(hour("Created_at_local")).count().collect()
 
-#%%
-#Visualize tweet hourly
+# %%
+# Visualize tweet hourly
 import matplotlib.pyplot as plt
 
 tmp = dict(hours)
@@ -54,3 +55,33 @@ ax.margins(x=0)
 ax.plot(tmp.keys(), tmp.values())
 ax.set_title("Hourly tweets")
 fig.show()
+
+# %%
+replied_count = df.where(col("Referenced_type") == "replied_to").count()
+print(f"Replied to count {replied_count}")
+
+# %%
+replied_to_self = df.where(col("Referenced_type") == "replied_to").where(col("Referenced_user") == 20629858).count()
+print(f"Replied to own id {replied_to_self}")
+
+# %%
+# NB elendig kode
+tweet_ids = df.rdd.map(lambda x: x['Tweet_id']).collect()
+replied_to_id_in_df = df.where(col("Referenced_type") == "replied_to").where(
+    col("Referenced_tweet").isin(tweet_ids)).count()
+print(f"Replied id exists in df {replied_to_id_in_df}")
+# %%
+quoted_count = df.where(col("Referenced_type") == "quoted").count()
+print(f"Quoted count {quoted_count}")
+
+# %%
+# NB elendig kode
+tweet_ids = df.rdd.map(lambda x: x['Tweet_id']).collect()
+quoted_to_id_in_df = df.where(col("Referenced_type") == "quoted").where(
+    col("Referenced_tweet").isin(tweet_ids)).count()
+print(f"Quoted id exists in df {quoted_to_id_in_df}")
+
+#%%
+#Slow code
+not_in_df = df.where(col("Referenced_tweet").isin(tweet_ids) == False).count()
+print(f"Not in df {not_in_df}")

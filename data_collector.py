@@ -32,12 +32,12 @@ def collect_timeline_tweets(iterations: int, number_of_tweets: int, start_time=N
     for _ in range(0, iterations):
         try:
             res = client.get_users_tweets(nrk_user_id,
-                                      tweet_fields=tweepy.PUBLIC_TWEET_FIELDS,
-                                      max_results=number_of_tweets,
-                                      pagination_token=pageination_token,
-                                      start_time=start_time,
-                                      )
-            start_time=None
+                                          tweet_fields=tweepy.PUBLIC_TWEET_FIELDS,
+                                          max_results=number_of_tweets,
+                                          pagination_token=pageination_token,
+                                          start_time=start_time,
+                                          )
+            start_time = None
             extract_data(data_list, res)
         except Exception as e:
             print(e)
@@ -68,4 +68,3 @@ def extract_data(data_list, res):
 
 data = collect_timeline_tweets(iterations=30, number_of_tweets=100, start_time=final_date)
 save_csv(data)
-
