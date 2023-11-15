@@ -5,7 +5,7 @@ from pyspark.sql.functions import col, to_timestamp, date_format, hour
 from pyspark.sql.types import StructType, StructField, StringType, DoubleType, IntegerType, DateType, TimestampType, \
     LongType
 
-path = "/Users/madslun/Documents/Fag:Programmering/TrafficAnnouncementsAutomation/output-3-10-.csv"
+path = "/Users/madslun/Documents/Fag-Programmering/TrafficAnnouncementsAutomation/data/NRK/output-3-10-.csv"
 
 # %%
 data_schema = StructType(fields=[
