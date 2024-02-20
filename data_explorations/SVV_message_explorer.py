@@ -14,9 +14,9 @@ spark = SparkSession.builder.config("spark.driver.memory", "15g").appName("TAA_S
 df = spark.read.json(path=path)
 df.count()
 # Remove duplicates
-df = (df.select(["*", "locations.locationDescriptor"])
-    .dropDuplicates(
-    ["overallStartTime", "description", "recordId"]))\
+# df = (df.select(["*", "locations.locationDescriptor"])
+#     .dropDuplicates(
+#     ["overallStartTime", "description", "recordId"]))\
     #TODO: NY METODE .dropDuplicates(['overallStartTime', 'description', 'recordId'])
 
 #%%
