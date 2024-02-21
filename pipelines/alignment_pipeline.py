@@ -43,3 +43,4 @@ for index, embedding in enumerate(a_embeddings):
 print(correct_counter / counter)
 
 #%%
+link_df = link_df.withColumn("a", sf.concat(link_df["nrk_id"], sf.lit(df_tweet.where(df_tweet["id"] == 1393140739501080578).select("full_text").first()[0])))
