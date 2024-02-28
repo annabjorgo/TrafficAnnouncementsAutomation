@@ -107,7 +107,8 @@ link_dict = {
     "1385611841653649412": "NPRA_VL_294107_1"
 }
 rev_link_dict = {v: k for k, v in link_dict.items()}
-
+tweet_ids = list(link_dict.keys())
+svv_recordIds = list(link_dict.values())
 # %%
 #
 # tweet_ids = [1579429693274853377,
@@ -381,9 +382,9 @@ for i in range(3):
 a = df.where(sf.col("recordId").isin(svv_recordIds)).select(sf.col("recordId"), sf.concat_ws(",", sf.col("description"),
                                                                                              sf.col(
                                                                                                  "locations.locationDescriptor")).alias(
-    "conc")).toPandas()
+    "conc"))
 # .show(n= 40, truncate=False))
 # %%
-b = df_tweet.where(sf.col("id").isin(tweet_ids)).select(sf.col("id"), sf.col("full_text")).toPandas()
+b = df_tweet.where(sf.col("id").isin(tweet_ids)).select(sf.col("id"), sf.col("full_text"))
 # .show(truncate=False, n= 40))
 # %%
