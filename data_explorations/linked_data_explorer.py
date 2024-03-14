@@ -1,8 +1,4 @@
 import pyspark.sql.functions as sf
-from tweet_json_explorer import df_tweet
-from SVV_message_explorer import df
-
-# %%
 
 link_dict = {
     "1579429693274853377": "f859e2e0-b192-4a29-896a-6790c161a816_2",
@@ -106,9 +102,12 @@ link_dict = {
     "1385611823001579520": "NPRA_VL_294108_1",
     "1385611841653649412": "NPRA_VL_294107_1"
 }
+
 rev_link_dict = {v: k for k, v in link_dict.items()}
 tweet_ids = list(link_dict.keys())
 svv_recordIds = list(link_dict.values())
+
+
 # %%
 #
 # tweet_ids = [1579429693274853377,

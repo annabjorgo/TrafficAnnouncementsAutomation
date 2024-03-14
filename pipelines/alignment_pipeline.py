@@ -1,50 +1,32 @@
+import datetime
+
+import pandas as pd
+import pyspark.sql.functions as sf
 import torch
 from sentence_transformers import SentenceTransformer, util
 
+from pipelines.pipeline_utils import pipeline_starter, filter_pyspark_df, transfer_to_pandas, align_data_sentence_transformer, \
+    measure_accuracy, check_incorrect, print_incorrect
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-model = SentenceTransformer('intfloat/multilingual-e5-large', device=device)
-#%%
+df, df_tweet, link_dict, spark = pipeline_starter()
+models_to_test = [
+    'BAAI/bge-large-en-v1.5',
+    # 'Cohere/Cohere-embed-multilingual-v3.0', doesn't exist on sentene transformers
+    #     "Salesforce/SFR-Embedding-Mistral", too big
 
-input_texts = [
-    "jeg heter mads og liker banan",
-    "jeg heter anna men hater banan",
 ]
 
-em1 = model.encode(input_texts[0], convert_to_tensor=True)
-em2 = model.encode(input_texts[1], convert_to_tensor=True)
+model = SentenceTransformer('intfloat/multilingual-e5-large', device=device)
+df.persist()
 
-#%%
-util.pytorch_cos_sim(em1, em2)
+# %%
 
-#%%
-a_embeddings = model.encode(list(a['conc']), convert_to_tensor=True)
-b_embeddings = model.encode(list(b['full_text']), convert_to_tensor=True)
+df, link_df = filter_pyspark_df(df, df_tweet, link_dict, spark)
+pd_df, pd_link = transfer_to_pandas(df, link_df, model)
 
-#%%
-r = util.pytorch_cos_sim(a_embeddings[0], b_embeddings)
-print(r.argmax())
-print(a.iloc[0])
-print(b.iloc[int(r.argmax())])
-#%%
-correct_counter = 0
-counter = 0
-for index, embedding in enumerate(a_embeddings):
-    print(counter)
-    counter += 1
-    sim = util.pytorch_cos_sim(embedding, b_embeddings)
-    a_id = a.iloc[index]['recordId']
-    b_id = b.iloc[int(sim.argmax())]['id']
-    if str(merge_dict[a_id]).strip() == str(b_id).strip():
-        correct_counter += 1
-    else:
-        print(f'Correct svv: {a.iloc[index]["conc"]}', "\n", f"Predicted tweet: {b.iloc[int(sim.argmax())]['full_text']}",
-              "\n", f"Actual tweet: {b[b['id'] == str(merge_dict[a.iloc[index]['recordId']])].iloc[0]['full_text']}")
-
-print(correct_counter / counter)
-
-#%%
-link_df = spark.createDataFrame(link_dict.items(), schema=["nrk_id", "svv_id"])
-#%%
-#%%
-link_df = link_df.withColumn("a", model.encode(sf.lit(df_tweet.where(df_tweet["id"] == 1393140739501080578).select("full_text").first()[0])))
+aligned = align_data_sentence_transformer(pd_link, pd_df, timedelta=6, model=model)
+correct, incorrect = measure_accuracy(aligned)
+incorrect_ = check_incorrect(incorrect, pd_link, pd_df)
+print_incorrect(incorrect_)
