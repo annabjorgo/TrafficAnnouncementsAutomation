@@ -1,5 +1,6 @@
 from datetime import timezone
 import datetime
+from tqdm import tqdm
 
 import numpy as np
 import pandas as pd
@@ -16,7 +17,7 @@ from nltk.corpus import stopwords
 from string import punctuation
 
 def pipeline_starter():
-    spark = SparkSession.builder.config("spark.executor.memory", "25g").config("spark.driver.memory", "25").appName(
+    spark = SparkSession.builder.config("spark.executor.memory", "25g").config("spark.driver.memory", "25g").appName(
         "TAA_SVV_json").getOrCreate()
     spark.sql("set spark.sql.legacy.timeParserPolicy=LEGACY")
 
@@ -62,6 +63,8 @@ def filter_pyspark_df(df, df_tweet, link_dict, spark):
 def split_sentences(text_list):
     return [x.split(" ") for x in text_list]
 
+def join_sentences(text_list):
+    return [' '.join(x) for x in text_list]
 
 def remove_stopwords_punctuation(text_list):
     text = [x.split(" ") for x in text_list]
@@ -73,21 +76,23 @@ def remove_stopwords_punctuation(text_list):
 
 
 
-def transfer_to_pandas(df, link_df, model):
+def transfer_to_pandas(df, link_df):
     pd_link = link_df.toPandas()
-    pd_link['nrk_embed'] = model.encode(pd_link['nrk_text'], show_progress_bar=True).tolist()
     pd_df = df.select("recordId", "concat_text", "overallStartTime", "situationId").toPandas()
     pd_df['overallStartTime'] = pd.to_datetime(pd_df['overallStartTime'])
     pd_link['nrk_created_at'] = pd.to_datetime(pd_link['nrk_created_at'])
     pd_link['nrk_created_at'] = pd_link['nrk_created_at'].dt.tz_localize(timezone.utc)
     return pd_df, pd_link
 
+def embed_pandas(pd_link, model):
+    pd_link['nrk_embed'] = model.encode(pd_link['nrk_text'], show_progress_bar=True).tolist()
+    return pd_link
 
 def align_data(q_df, svv_df, timedelta, model, sim_func):
     alignment = []
     time_window = pd.Timedelta(hours=timedelta)
 
-    for nrk_it in q_df.itertuples():
+    for nrk_it in tqdm(q_df.itertuples(), total=q_df.shape[0], disable=True):
         search_df = svv_df[abs(svv_df['overallStartTime'] - nrk_it.nrk_created_at) <= time_window].copy()
         max_sim, svv_id, svv_situation = sim_func(model, nrk_it, search_df)
         alignment.append(
@@ -117,3 +122,14 @@ def max_sim_bm25(model, nrk_it, search_df):
     return scores[pos], search_df.iloc[pos].recordId, search_df.iloc[pos].situationId
 
 
+def max_sim_jaccard(model, nrk_it, search_df):
+    sim_arr = []
+    a = set(nrk_it.nrk_text.lower().split(" "))
+    for it in search_df['concat_text'].tolist():
+        it = [x.lower() for x in it]
+        b = set(it)
+        inter = a.intersection(b)
+        uni = a.union(b)
+        sim_arr.append(float(len(inter) / len(uni)))
+    pos = np.argmax(sim_arr)
+    return sim_arr[pos], search_df.iloc[pos].recordId, search_df.iloc[pos].situationId
