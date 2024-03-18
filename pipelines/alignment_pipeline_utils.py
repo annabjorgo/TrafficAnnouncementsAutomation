@@ -1,20 +1,22 @@
-from datetime import timezone
 import datetime
-from tqdm import tqdm
+from datetime import timezone
 
+import nltk
 import numpy as np
 import pandas as pd
 import pyspark.sql.functions as sf
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_unixtime, unix_timestamp
+from sentence_transformers import util
+from tqdm import tqdm
+from multiprocessing import Process
 
 from data_explorations.link_dict import link_dict
-from rank_bm25 import BM25Okapi
-import nltk
-from sentence_transformers import SentenceTransformer, util
+
 nltk.download("stopwords")
 from nltk.corpus import stopwords
 from string import punctuation
+
 
 def pipeline_starter():
     spark = SparkSession.builder.config("spark.executor.memory", "25g").config("spark.driver.memory", "25g").appName(
@@ -41,6 +43,7 @@ def pipeline_starter():
 
 
 def filter_pyspark_df(df, df_tweet, link_dict, spark):
+    df_tweet = df_tweet.where(sf.year('created_at') > 2015)
     link_df = spark.createDataFrame(link_dict.items(), schema=["nrk_id", "svv_id"])
     df = df.withColumn("dataProcessingNote",
                        sf.regexp_replace("dataProcessingNote", "Merk at sluttiden er usikker og kan endres.", "")) \
@@ -60,11 +63,14 @@ def filter_pyspark_df(df, df_tweet, link_dict, spark):
 
     return df, link_df
 
+
 def split_sentences(text_list):
     return [x.split(" ") for x in text_list]
 
+
 def join_sentences(text_list):
     return [' '.join(x) for x in text_list]
+
 
 def remove_stopwords_punctuation(text_list):
     text = [x.split(" ") for x in text_list]
@@ -75,8 +81,7 @@ def remove_stopwords_punctuation(text_list):
     return text
 
 
-
-def transfer_to_pandas(df, link_df):
+def transfer_to_pandas_test(df, link_df):
     pd_link = link_df.toPandas()
     pd_df = df.select("recordId", "concat_text", "overallStartTime", "situationId").toPandas()
     pd_df['overallStartTime'] = pd.to_datetime(pd_df['overallStartTime'])
@@ -84,15 +89,50 @@ def transfer_to_pandas(df, link_df):
     pd_link['nrk_created_at'] = pd_link['nrk_created_at'].dt.tz_localize(timezone.utc)
     return pd_df, pd_link
 
+
 def embed_pandas(pd_link, model):
     pd_link['nrk_embed'] = model.encode(pd_link['nrk_text'], show_progress_bar=True).tolist()
     return pd_link
+
+
+def embed_nrk(df_tweet, model):
+    df_tweet['nrk_embed'] = model.encode(df_tweet['full_text'], show_progress_bar=True).tolist()
+    return df_tweet
+
+
+def transform_for_alignment_e5(df, df_tweet):
+    df_tweet = df_tweet.toPandas()
+    df_tweet['nrk_id'] = df_tweet['id']
+    pd_df = df.select("recordId", "concat_text", "overallStartTime", "situationId").toPandas()
+    pd_df['overallStartTime'] = pd.to_datetime(pd_df['overallStartTime'])
+    df_tweet['nrk_created_at'] = pd.to_datetime(df_tweet['created_at'])
+    df_tweet['nrk_created_at'] = df_tweet['nrk_created_at'].dt.tz_localize(timezone.utc)
+    return pd_df, df_tweet
+
+
+def align_multi(q_df, svv_df, timedelta):
+    alignment = []
+    time_window = pd.Timedelta(hours=timedelta)
+    processes = [Process(target=task, args=(nrk_it, svv_df, time_window, alignment)) for nrk_it in q_df.itertuples()]
+    for process in tqdm(processes):
+        process.start()
+
+    for process in tqdm(processes):
+        process.join()
+
+    return alignment
+
+def task(nrk_it, svv_df, time_window, alignment):
+    search_df = svv_df[abs(svv_df['overallStartTime'] - nrk_it.nrk_created_at) <= time_window].copy()
+    sim = util.pytorch_cos_sim(nrk_it.nrk_embed, search_df['svv_embed'].tolist())
+    pos = np.argmax(sim).item()
+    alignment.append((sim[0][pos], search_df.iloc[pos].recordId, search_df.iloc[pos].situationId))
 
 def align_data(q_df, svv_df, timedelta, model, sim_func):
     alignment = []
     time_window = pd.Timedelta(hours=timedelta)
 
-    for nrk_it in tqdm(q_df.itertuples(), total=q_df.shape[0], disable=True):
+    for nrk_it in tqdm(q_df.itertuples(), total=q_df.shape[0]):
         search_df = svv_df[abs(svv_df['overallStartTime'] - nrk_it.nrk_created_at) <= time_window].copy()
         max_sim, svv_id, svv_situation = sim_func(model, nrk_it, search_df)
         alignment.append(
@@ -113,10 +153,15 @@ def max_sim_sentence_transformer(model, nrk_it, search_df):
     return sim[0][pos], search_df.iloc[pos].recordId, search_df.iloc[pos].situationId
 
 
+def max_sim_sentence_transformer_precomputed(model, nrk_it, search_df):
+    sim = util.pytorch_cos_sim(nrk_it.nrk_embed, search_df['svv_embed'].tolist())
+    pos = np.argmax(sim).item()
+    return sim[0][pos], search_df.iloc[pos].recordId, search_df.iloc[pos].situationId
+
+
 def max_sim_bm25(model, nrk_it, search_df):
     out = model(search_df['concat_text'].tolist())
     q = str(nrk_it.nrk_text).split(" ")
-    global scores
     scores = out.get_scores(q)
     pos = np.argmax(scores)
     return scores[pos], search_df.iloc[pos].recordId, search_df.iloc[pos].situationId

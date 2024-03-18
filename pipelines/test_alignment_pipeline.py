@@ -6,7 +6,7 @@ import torch
 from sentence_transformers import SentenceTransformer, util
 from rank_bm25 import BM25Okapi
 
-from pipelines.alignment_pipeline_utils import pipeline_starter, filter_pyspark_df, transfer_to_pandas, \
+from pipelines.alignment_pipeline_utils import pipeline_starter, filter_pyspark_df, transfer_to_pandas_test, \
     align_data, \
     max_sim_sentence_transformer, max_sim_bm25, remove_stopwords_punctuation, split_sentences, embed_pandas, \
     max_sim_jaccard, join_sentences
@@ -15,19 +15,12 @@ from pipelines.alignment_result_utils import measure_accuracy, check_incorrect, 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 df, df_tweet, link_dict, spark = pipeline_starter()
-models_to_test = [
-    'BAAI/bge-large-en-v1.5',
-    # 'Cohere/Cohere-embed-multilingual-v3.0', doesn't exist on sentene transformers
-    #     "Salesforce/SFR-Embedding-Mistral", too big
-
-]
-
 df.persist()
 
 # %%
 
 df, link_df = filter_pyspark_df(df, df_tweet, link_dict, spark)
-pd_df, pd_link = transfer_to_pandas(df, link_df)
+pd_df, pd_link = transfer_to_pandas_test(df, link_df)
 # %%
 model_name = 'intfloat/multilingual-e5-large'
 model = SentenceTransformer(model_name, device=device)
