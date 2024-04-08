@@ -130,15 +130,21 @@ def task(nrk_it, svv_df, time_window, alignment):
 
 def align_data(q_df, svv_df, timedelta, model, sim_func):
     alignment = []
+    no_alignment = []
     time_window = pd.Timedelta(hours=timedelta)
 
     for nrk_it in tqdm(q_df.itertuples(), total=q_df.shape[0]):
         search_df = svv_df[abs(svv_df['overallStartTime'] - nrk_it.nrk_created_at) <= time_window].copy()
-        max_sim, svv_id, svv_situation = sim_func(model, nrk_it, search_df)
-        alignment.append(
-            {"nrk_id": nrk_it.nrk_id, "recordId": svv_id, "situationId": svv_situation, "similarity": max_sim})
+        if len(search_df) == 0:
+            print(f"Found no matching id for {nrk_it.nrk_id}")
+            no_alignment.append({"nrk_id": nrk_it.nrk_id, "recordId": svv_id, "situationId": svv_situation, "svv_text": svv_text, "nrk_text": nrk_it.full_text})
+            continue
 
-    tmp_df = pd.DataFrame(alignment, columns=(['nrk_id', 'prediction_svv_id', 'situationId', 'cos_sim']))
+        max_sim, svv_id, svv_situation, svv_text = sim_func(model, nrk_it, search_df)
+        alignment.append(
+            {"nrk_id": nrk_it.nrk_id, "recordId": svv_id, "situationId": svv_situation, "similarity": max_sim, "svv_text": svv_text, "nrk_text": nrk_it.full_text})
+
+    tmp_df = pd.DataFrame(alignment)
     file_name = f'data/pipeline_runs/alignment d:{datetime.datetime.now().day} m:{datetime.datetime.now().month} h:{datetime.datetime.now().hour}.csv'
     tmp_df.to_csv(
         file_name,
@@ -156,7 +162,7 @@ def max_sim_sentence_transformer(model, nrk_it, search_df):
 def max_sim_sentence_transformer_precomputed(model, nrk_it, search_df):
     sim = util.pytorch_cos_sim(nrk_it.nrk_embed, search_df['svv_embed'].tolist())
     pos = np.argmax(sim).item()
-    return sim[0][pos], search_df.iloc[pos].recordId, search_df.iloc[pos].situationId
+    return sim[0][pos].item(), search_df.iloc[pos].recordId, search_df.iloc[pos].situationId, search_df.iloc[pos].concat_text
 
 
 def max_sim_bm25(model, nrk_it, search_df):
