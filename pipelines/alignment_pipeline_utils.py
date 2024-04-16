@@ -66,7 +66,7 @@ def filter_pyspark_df(df, df_tweet, link_dict, spark):
                                                                                                   "nrk_created_at",
                                                                                                   "situationId")
 
-    return df, link_df
+    return df, link_df, df_tweet
 
 
 def split_sentences(text_list):
@@ -153,10 +153,15 @@ def align_data(q_df, svv_df, timedelta, model, sim_func):
         alignment.append(
             {"nrk_id": nrk_it.nrk_id, "recordId": svv_id, "situationId": svv_situation, "similarity": max_sim,
              "svv_text": svv_text, "nrk_text": nrk_it.full_text, "svv_ts": svv_start_time,
-             "nrk_ts": nrk_it.nrk_created_atm})
+             "nrk_ts": nrk_it.nrk_created_at})
 
     tmp_df = pd.DataFrame(alignment)
     file_name = f'data/pipeline_runs/alignment d:{datetime.datetime.now().day} m:{datetime.datetime.now().month} h:{datetime.datetime.now().hour}.csv'
+    tmp_df.to_csv(
+        file_name,
+        index=False)
+    tmp_df = pd.DataFrame(no_alignment)
+    file_name = f'data/pipeline_runs/no_alignment d:{datetime.datetime.now().day} m:{datetime.datetime.now().month} h:{datetime.datetime.now().hour}.csv'
     tmp_df.to_csv(
         file_name,
         index=False)
