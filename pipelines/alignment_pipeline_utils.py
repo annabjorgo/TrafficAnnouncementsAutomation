@@ -156,12 +156,12 @@ def align_data(q_df, svv_df, timedelta, model, sim_func):
              "nrk_ts": nrk_it.nrk_created_at})
 
     tmp_df = pd.DataFrame(alignment)
-    file_name = f'data/pipeline_runs/alignment d:{datetime.datetime.now().day} m:{datetime.datetime.now().month} h:{datetime.datetime.now().hour}.csv'
+    file_name = f'data/pipeline_runs/alignment/alignment d:{datetime.datetime.now().day} m:{datetime.datetime.now().month} h:{datetime.datetime.now().hour}.csv'
     tmp_df.to_csv(
         file_name,
         index=False)
     tmp_df = pd.DataFrame(no_alignment)
-    file_name = f'data/pipeline_runs/no_alignment d:{datetime.datetime.now().day} m:{datetime.datetime.now().month} h:{datetime.datetime.now().hour}.csv'
+    file_name = f'data/pipeline_runs/alignment/no_alignment d:{datetime.datetime.now().day} m:{datetime.datetime.now().month} h:{datetime.datetime.now().hour}.csv'
     tmp_df.to_csv(
         file_name,
         index=False)
