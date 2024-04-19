@@ -47,7 +47,17 @@ def check_time_delta(no_df):
 
 q, r = check_time_delta(no_df)
 
-
+#%%%
+def check_year_no_alignment():
+    pd.DataFrame(pd_df_tweet[pd_df_tweet['id'].isin(list(no_df['nrk_id']))]['nrk_created_at'].dt.year).groupby(
+        "nrk_created_at").size().plot.bar(title="")
+    plt.title("")
+    # tikzplotlib.save(f"not aligned incidents bar.tex")
+    plt.show()
+    plt.clf()
+    plt.cla()
+    plt.close()
+check_year_no_alignment()
 # %%
 def save_200_aligned_above_90(aligned_df):
     (aligned_df[aligned_df['similarity'] > 0.9].sample(n=200)).to_csv(
@@ -129,3 +139,5 @@ def above_9_stats():
     print(annotated_above_9_df[annotated_above_9_df['Kolonne1'] == 2]['similarity'].mean())
 
 above_9_stats()
+
+#%%
