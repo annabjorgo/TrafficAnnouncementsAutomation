@@ -10,14 +10,15 @@ from datasets import load_dataset
 from optuna import Trial
 from setfit import SetFitModel
 from transformers import AutoModelForSequenceClassification, Trainer, AutoTokenizer, TrainingArguments, \
-    DataCollatorWithPadding
+    DataCollatorWithPadding, IntervalStrategy
 
 # %%
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 accuracy = evaluate.load("accuracy")
 precision = evaluate.load("precision")
-training_file = "data/pipeline_runs/classification/threshold: 0.9, negative_size:300000 - d:18 m:4 h:12/train.csv"
-test_file = "data/pipeline_runs/classification/threshold: 0.9, negative_size:300000 - d:18 m:4 h:12/test.csv"
+recall = evaluate.load("recall")
+training_file = "data/pipeline_runs/classification/threshold: 0.9, negative_size:794873 - d:24 m:4 h:8/train.csv"
+test_file = "data/pipeline_runs/classification/threshold: 0.9, negative_size:794873 - d:24 m:4 h:8/test.csv"
 small_file = "data/pipeline_runs/classification/threshold: 0.9, negative_size:300000 - d:18 m:4 h:12/small.csv"
 os.environ['WANDB_PROJECT'] = "master-classification"
 # %%
@@ -30,16 +31,16 @@ def optuna_hp_space(trial):
         "learning_rate": trial.suggest_float("learning_rate", 9e-8, 1e-3, log=True),
     }
 
+def model_init(trial):
+    return AutoModelForSequenceClassification.from_pretrained(
+        pre_model, num_labels=2, id2label=id2label, label2id=label2id, trust_remote_code=True,
+    ).to(device)
 
 def preprocess_text(df):
     # TODO: should i use [CLS] and such here
+    # tokenized_text = tokenizer(list(map(lambda x: "[CLS]" + x + "[SEP]", df['concat_text'])))
     tokenized_text = tokenizer(df['concat_text'])
-    labels = df['post']
-    labels_matrix = np.zeros((len(tokenized_text.encodings), len(id2label)))
-    for pos, obj in enumerate(labels):
-        labels_matrix[pos, obj] = 1
-
-    tokenized_text["label"] = labels_matrix.tolist()
+    tokenized_text["label"] = df['post']
     return tokenized_text
 
 
@@ -51,29 +52,31 @@ def prepare_dataset():
 
     return train_data, test_data
 
+def pre_process_logits(pred, label):
+    return torch.argmax(pred, axis=1)
 
 def compute_metrics(eval_pred):
     predictions, labels = eval_pred
-    predictions = np.argmax(predictions, axis=1)
-    labels = np.argmax(labels, axis=1)
     pr = precision.compute(predictions=predictions, references=labels)
     a = accuracy.compute(predictions=predictions, references=labels)
-    return {"accuracy": a, "precision": pr}
+    r = recall.compute(predictions=predictions, references=labels)
+    return {**a, **pr, **r}
+
 
 
 def get_training_args(pre_model):
+    IntervalStrategy("steps")
     return TrainingArguments(
         output_dir="model_run",
         logging_dir="model_run_logs",
         learning_rate=5e-5,
-        per_device_train_batch_size=8,
-        per_device_eval_batch_size=8,
-        dataloader_num_workers=8,
+        dataloader_num_workers=4,
         do_train=True,
-        num_train_epochs=20,
+        num_train_epochs=10,
         weight_decay=0.01,
-        evaluation_strategy="epoch",
-        save_strategy="epoch",
+        eval_steps=5000,
+        evaluation_strategy="steps",
+        save_strategy="steps",
         load_best_model_at_end=True,
         push_to_hub=False,
         save_total_limit=4,
@@ -90,6 +93,7 @@ def run_training(pre_model):
 
     model = AutoModelForSequenceClassification.from_pretrained(
         pre_model, num_labels=2, id2label=id2label, label2id=label2id, trust_remote_code=True,
+        problem_type="single_label_classification"
     ).to(device)
 
     trainer = Trainer(
@@ -100,25 +104,24 @@ def run_training(pre_model):
         tokenizer=tokenizer,
         data_collator=data_collator,
         compute_metrics=compute_metrics,
+        preprocess_logits_for_metrics=pre_process_logits
+
     )
-    best_trials = trainer.hyperparameter_search(
-        direction=["minimize", "maximize"],
-        backend="optuna",
-        hp_space=optuna_hp_space,
-        n_trials=40,
-    )
+
     trainer.train()
     trainer.evaluate()
 
 
 # %%
-curr_model = "bert-base-multilingual-cased"
-run_training(curr_model)
+global pre_model
+# curr_model = "bert-base-multilingual-cased"
+# pre_model = curr_model
+# run_training(curr_model)
+# # %%
+
 # %%
-curr_model = "bert-base-cased"
-run_training(curr_model)
-# %%
-curr_model = "ltg/norbert3-base"
+curr_model = "ltg/norbert3-large"
+pre_model = curr_model
 run_training(curr_model)
 # %%
 wandb
