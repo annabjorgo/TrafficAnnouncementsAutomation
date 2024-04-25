@@ -4,13 +4,16 @@ from typing import Dict, Union
 
 import evaluate
 import numpy as np
+from tqdm.auto import tqdm
+
 import torch
 import wandb
 from datasets import load_dataset
 from optuna import Trial
 from setfit import SetFitModel
 from transformers import AutoModelForSequenceClassification, Trainer, AutoTokenizer, TrainingArguments, \
-    DataCollatorWithPadding, IntervalStrategy
+    DataCollatorWithPadding, IntervalStrategy, ProgressCallback
+from transformers.trainer_utils import has_length
 
 # %%
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -25,6 +28,16 @@ os.environ['WANDB_PROJECT'] = "master-classification"
 label2id = {'post': 1, 'discard': 0}
 id2label = {1: 'post', 0: 'discard'}
 
+class ProgressOverider(ProgressCallback):
+    def on_prediction_step(self, args, state, control, eval_dataloader=None, **kwargs):
+        if state.is_world_process_zero and has_length(eval_dataloader):
+            if self.prediction_bar is None:
+                self.prediction_bar = tqdm(
+                    total=len(eval_dataloader), dynamic_ncols=True
+                )
+            self.prediction_bar.update(1)
+
+#%%
 
 def optuna_hp_space(trial):
     return {
@@ -69,11 +82,12 @@ def get_training_args(pre_model):
     return TrainingArguments(
         output_dir="model_run",
         logging_dir="model_run_logs",
-        learning_rate=5e-5,
+        learning_rate=9e-6,
         dataloader_num_workers=4,
         do_train=True,
         num_train_epochs=10,
         weight_decay=0.01,
+        save_steps=5000,
         eval_steps=5000,
         evaluation_strategy="steps",
         save_strategy="steps",
@@ -81,6 +95,7 @@ def get_training_args(pre_model):
         push_to_hub=False,
         save_total_limit=4,
         run_name=pre_model,
+        auto_find_batch_size=True
     )
 
 
@@ -108,20 +123,24 @@ def run_training(pre_model):
 
     )
 
+    progress_callback = next(filter(lambda x: isinstance(x, ProgressCallback), trainer.callback_handler.callbacks),
+                                 None)
+    trainer.remove_callback(progress_callback)
+    trainer.add_callback(ProgressOverider)
     trainer.train()
     trainer.evaluate()
 
 
 # %%
 global pre_model
-# curr_model = "bert-base-multilingual-cased"
-# pre_model = curr_model
-# run_training(curr_model)
+curr_model = "bert-base-multilingual-cased"
+pre_model = curr_model
+run_training(curr_model)
 # # %%
 
 # %%
-curr_model = "ltg/norbert3-large"
-pre_model = curr_model
-run_training(curr_model)
+# curr_model = "ltg/norbert3-large"
+# pre_model = curr_model
+# run_training(curr_model)
 # %%
 wandb

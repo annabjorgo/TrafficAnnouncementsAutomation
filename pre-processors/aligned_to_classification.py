@@ -32,17 +32,23 @@ rows_to_publish['post'] = 1
 published_recordIds = list(set(list(aligned_df['recordId'])))
 published_situationIds = list(set(list(aligned_df['situationId'])))
 seed_value = 42
-negative_size = 300_00
+negative_size = 300_000
 
 rows_not_publish = pd_df[~pd_df['recordId'].isin(published_recordIds) & ~pd_df['situationId'].isin(published_situationIds)].sample(n=negative_size, random_state=seed_value).copy()
 rows_not_publish['post'] = 0
 #%%
 train_size = 0.6
-test_and_val_size = 0.2 # 20% for each
+test_and_val_size = 0.8 # 20% for each
 combined_df = pd.concat([rows_not_publish, rows_to_publish], axis=0)
 
 train, validate, test = np.split(combined_df.sample(frac=1, random_state=seed_value), [int(train_size*len(combined_df)), int(test_and_val_size * len(combined_df))])
 
+print(f"Negative size is {negative_size}")
+print(f"Percent to post {len(train[train['post'] == 1]) / len(train)} for train", f"Percent of combined {len(train)/len(combined_df)} for train")
+print(f"Percent to post {len(validate[validate['post'] == 1]) / len(validate)} for validate", f"Percent of combined {len(validate)/len(combined_df)} for validate")
+print(f"Percent to post {len(test[test['post'] == 1]) / len(test)} for test", f"Percent of combined {len(test)/len(combined_df)} for test")
+
+list(validate['recordId'])
 #%%
 folder_name = f'data/pipeline_runs/classification/threshold: {threshold}, negative_size:{negative_size} - d:{datetime.datetime.now().day} m:{datetime.datetime.now().month} h:{datetime.datetime.now().hour}/'
 if not os.path.exists(folder_name):

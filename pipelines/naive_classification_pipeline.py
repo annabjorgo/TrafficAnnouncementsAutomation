@@ -3,15 +3,17 @@ import os
 
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
-from sklearn.naive_bayes import MultinomialNB
+from sklearn.naive_bayes import MultinomialNB, ComplementNB
 from sklearn.pipeline import make_pipeline
 from sklearn.metrics import classification_report, accuracy_score
 from nltk.corpus import stopwords
 import nltk
 from nltk.stem import SnowballStemmer
+import numpy as np
 import re
 from tabulate import tabulate
 import evaluate
+from sklearn.utils import compute_class_weight
 
 # %%
 nltk.download("stopwords")
@@ -26,30 +28,10 @@ text_field = "concat_text"
 prediction_field = "post"
 
 
-# # %% Load data
-# df_train = pd.read_csv('data/pipeline_runs/classification/threshold: 0.9, negative_size:30000 - d:24 m:4 h:8/train.csv')
-# df_test = pd.read_csv('data/pipeline_runs/classification/threshold: 0.9, negative_size:30000 - d:24 m:4 h:8/test.csv')
-#
-# # %% Stop words and stemming
-# stopwords = list(stopwords.words('norwegian')) if apply_stopwords else None
-# stemmer = SnowballStemmer("norwegian")
-#
-# # %% Pre-processing
-# df_train[text_field] = df_train[text_field].str.lower()
-# df_test[text_field] = df_test[text_field].str.lower()
-#
-# if number_removal:
-#     df_train[text_field] = df_train[text_field].apply(lambda x: re.sub(r'\d+', '', x))
-#     df_test[text_field] = df_test[text_field].apply(lambda x: re.sub(r'\d+', '', x))
-#
-# if apply_stemming:
-#     df_train[text_field] = df_train[text_field].apply(lambda x: ' '.join([stemmer.stem(token) for token in x.split()]))
-#     df_test[text_field] = df_test[text_field].apply(lambda x: ' '.join([stemmer.stem(token) for token in x.split()]))
-
-
 class NaiveBayesClassifier:
     def __init__(self, dataset_test, dataset_train, number_removal=True, apply_stemming=True, apply_stopwords=True,
-                 vectorization='count', save_false_predictions=False):
+                 vectorization='count', save_false_predictions=False, model="multinomial"):
+        self.model = ComplementNB() if model == "complementNB" else MultinomialNB()
         self.df_train = pd.read_csv(dataset_train)
         self.df_test = pd.read_csv(dataset_test)
 
@@ -93,9 +75,9 @@ class NaiveBayesClassifier:
 
         # Apply Naive Bayes
         if self.vectorization == 'count':
-            model = make_pipeline(CountVectorizer(stop_words=self.stopwords), MultinomialNB())
+            model = make_pipeline(CountVectorizer(stop_words=self.stopwords), self.model)
         else:
-            model = make_pipeline(TfidfVectorizer(stop_words=self.stopwords), MultinomialNB())
+            model = make_pipeline(TfidfVectorizer(stop_words=self.stopwords), self.model)
 
         model.fit(X_train, y_train)
         y_pred = model.predict(X_test)
@@ -121,10 +103,11 @@ class NaiveBayesClassifier:
 
     def print_scores(self, accuracy, precision, recall):
         # number_removal=True, apply_stemming=True, apply_stopwords=True, vectorization='bow'
-        variables = ["Train Dataset", "Number Removal", "Stemming", "Stopwords", "Vectorization", "Accuracy",
+        variables = ["Model", "Train Dataset", "Number Removal", "Stemming", "Stopwords", "Vectorization", "Accuracy",
                      "Precision", "Recall"]
         values = [
-            [self.dataset_train, self.number_removal, self.apply_stemming, self.apply_stopwords, self.vectorization,
+            [self.model, self.dataset_train, self.number_removal, self.apply_stemming, self.apply_stopwords,
+             self.vectorization,
              accuracy, precision, recall]]
 
         print(tabulate(values, headers=variables, tablefmt='grid'))
@@ -149,58 +132,118 @@ class NaiveBayesClassifier:
 
 
 if __name__ == '__main__':
+    medium_size = 'data/pipeline_runs/classification/threshold: 0.9, negative_size:30000 - d:24 m:4 h:8/'
+    big_size = 'data/pipeline_runs/classification/threshold: 0.9, negative_size:794873 - d:24 m:4 h:8/'
+
     classifier = NaiveBayesClassifier(
-        'data/pipeline_runs/classification/threshold: 0.9, negative_size:30000 - d:24 m:4 h:8/test.csv',
-        'data/pipeline_runs/classification/threshold: 0.9, negative_size:30000 - d:24 m:4 h:8/train.csv',
+        '%stest.csv' % medium_size,
+        '%strain.csv' % medium_size,
         number_removal=False, apply_stemming=True,
         apply_stopwords=True, vectorization='count')
     classifier.main()
 
     classifier = NaiveBayesClassifier(
-        'data/pipeline_runs/classification/threshold: 0.9, negative_size:30000 - d:24 m:4 h:8/test.csv',
-        'data/pipeline_runs/classification/threshold: 0.9, negative_size:30000 - d:24 m:4 h:8/train.csv',
+        '%stest.csv' % medium_size,
+        '%strain.csv' % medium_size,
         number_removal=True, apply_stemming=True,
         apply_stopwords=True, vectorization='count')
     classifier.main()
 
     classifier = NaiveBayesClassifier(
-        'data/pipeline_runs/classification/threshold: 0.9, negative_size:794873 - d:24 m:4 h:8/test.csv',
-        'data/pipeline_runs/classification/threshold: 0.9, negative_size:794873 - d:24 m:4 h:8/train.csv',
+        '%stest.csv' % big_size,
+        '%strain.csv' % big_size,
         number_removal=False, apply_stemming=True,
         apply_stopwords=True, vectorization='count')
     classifier.main()
 
     classifier = NaiveBayesClassifier(
-        'data/pipeline_runs/classification/threshold: 0.9, negative_size:794873 - d:24 m:4 h:8/test.csv',
-        'data/pipeline_runs/classification/threshold: 0.9, negative_size:794873 - d:24 m:4 h:8/train.csv',
+        '%stest.csv' % big_size,
+        '%strain.csv' % big_size,
         number_removal=True, apply_stemming=True,
         apply_stopwords=True, vectorization='count')
     classifier.main()
 
     classifier = NaiveBayesClassifier(
-        'data/pipeline_runs/classification/threshold: 0.9, negative_size:30000 - d:24 m:4 h:8/test.csv',
-        'data/pipeline_runs/classification/threshold: 0.9, negative_size:30000 - d:24 m:4 h:8/train.csv',
+        '%stest.csv' % medium_size,
+        '%strain.csv' % medium_size,
         number_removal=False, apply_stemming=True,
         apply_stopwords=True, vectorization='tf-idf')
     classifier.main()
 
     classifier = NaiveBayesClassifier(
-        'data/pipeline_runs/classification/threshold: 0.9, negative_size:30000 - d:24 m:4 h:8/test.csv',
-        'data/pipeline_runs/classification/threshold: 0.9, negative_size:30000 - d:24 m:4 h:8/train.csv',
+        '%stest.csv' % medium_size,
+        '%strain.csv' % medium_size,
         number_removal=True, apply_stemming=True,
         apply_stopwords=True, vectorization='tf-idf')
     classifier.main()
 
     classifier = NaiveBayesClassifier(
-        'data/pipeline_runs/classification/threshold: 0.9, negative_size:794873 - d:24 m:4 h:8/test.csv',
-        'data/pipeline_runs/classification/threshold: 0.9, negative_size:794873 - d:24 m:4 h:8/train.csv',
+        '%stest.csv' % big_size,
+        '%strain.csv' % big_size,
         number_removal=False, apply_stemming=True,
         apply_stopwords=True, vectorization='tf-idf')
     classifier.main()
 
     classifier = NaiveBayesClassifier(
-        'data/pipeline_runs/classification/threshold: 0.9, negative_size:794873 - d:24 m:4 h:8/test.csv',
-        'data/pipeline_runs/classification/threshold: 0.9, negative_size:794873 - d:24 m:4 h:8/train.csv',
+        '%stest.csv' % big_size,
+        '%strain.csv' % big_size,
         number_removal=True, apply_stemming=True,
         apply_stopwords=True, vectorization='tf-idf')
+    classifier.main()
+    #%%
+
+    classifier = NaiveBayesClassifier(
+        '%stest.csv' % medium_size,
+        '%strain.csv' % medium_size,
+        number_removal=False, apply_stemming=True,
+        apply_stopwords=True, vectorization='count', model="complementNB")
+    classifier.main()
+
+    classifier = NaiveBayesClassifier(
+        '%stest.csv' % medium_size,
+        '%strain.csv' % medium_size,
+        number_removal=True, apply_stemming=True,
+        apply_stopwords=True, vectorization='count', model="complementNB")
+    classifier.main()
+
+    classifier = NaiveBayesClassifier(
+        '%stest.csv' % big_size,
+        '%strain.csv' % big_size,
+        number_removal=False, apply_stemming=True,
+        apply_stopwords=True, vectorization='count', model="complementNB")
+    classifier.main()
+
+    classifier = NaiveBayesClassifier(
+        '%stest.csv' % big_size,
+        '%strain.csv' % big_size,
+        number_removal=True, apply_stemming=True,
+        apply_stopwords=True, vectorization='count', model="complementNB")
+    classifier.main()
+
+    classifier = NaiveBayesClassifier(
+        '%stest.csv' % medium_size,
+        '%strain.csv' % medium_size,
+        number_removal=False, apply_stemming=True,
+        apply_stopwords=True, vectorization='tf-idf', model="complementNB")
+    classifier.main()
+
+    classifier = NaiveBayesClassifier(
+        '%stest.csv' % medium_size,
+        '%strain.csv' % medium_size,
+        number_removal=True, apply_stemming=True,
+        apply_stopwords=True, vectorization='tf-idf', model="complementNB")
+    classifier.main()
+
+    classifier = NaiveBayesClassifier(
+        '%stest.csv' % big_size,
+        '%strain.csv' % big_size,
+        number_removal=False, apply_stemming=True,
+        apply_stopwords=True, vectorization='tf-idf', model="complementNB")
+    classifier.main()
+
+    classifier = NaiveBayesClassifier(
+        '%stest.csv' % big_size,
+        '%strain.csv' % big_size,
+        number_removal=True, apply_stemming=True,
+        apply_stopwords=True, vectorization='tf-idf', model="complementNB")
     classifier.main()
