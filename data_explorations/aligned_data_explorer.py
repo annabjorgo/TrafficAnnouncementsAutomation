@@ -9,10 +9,9 @@ df, df_tweet, link_dict, spark = pipeline_starter()
 df, link_df, df_tweet = filter_pyspark_df(df, df_tweet, link_dict, spark)
 pd_df, pd_df_tweet = transform_for_alignment_e5(df, df_tweet)
 # %%
-aligned_df = pd.read_csv("data/pipeline_runs/alignment/alignment d:10 m:4 h:17.csv")
+aligned_df = pd.read_csv("data/pipeline_runs/alignment/alignment d:23 m:4 h:16.csv")
 annotated_above_9_df = pd.read_csv("data/pipeline_runs/alignment/over90 (ferdig).csv", encoding='latin-1')
 annotated_df = pd.read_csv("data/pipeline_runs/alignment/annotated_alignment d:10 m:4 h:17.csv")
-no_df = pd.read_csv("data/pipeline_runs/alignment/no_alignment d:10 m:4 h:17.csv")
 
 
 # %%
@@ -49,7 +48,7 @@ q, r = check_time_delta(no_df)
 
 #%%%
 def check_year_no_alignment():
-    pd.DataFrame(pd_df_tweet[pd_df_tweet['id'].isin(list(no_df['nrk_id']))]['nrk_created_at'].dt.year).groupby(
+    pd.DataFrame(pd_df_tweet[pd_df_tweet['id'].isin(list(no_df['nrk_id'].astype("string")))]['nrk_created_at'].dt.year).groupby(
         "nrk_created_at").size().plot.bar(title="")
     plt.title("")
     # tikzplotlib.save(f"not aligned incidents bar.tex")

@@ -43,7 +43,7 @@ def pipeline_starter():
 
 
 def filter_pyspark_df(df, df_tweet, link_dict, spark):
-    df_tweet = df_tweet.where(sf.year('created_at') > 2015)
+    df_tweet = df_tweet.where(sf.year('created_at') > 2016)
     df_tweet = df_tweet.filter(~sf.col("full_text").rlike(
         "^https:\/\/t\.co\/[a-zA-Z0-9]+$"))  # To remove the tweets where only a url is contained
 
@@ -172,7 +172,8 @@ def max_sim_sentence_transformer(model, nrk_it, search_df):
     search_df['svv_embed'] = model.encode(search_df['concat_text'].tolist()).tolist()
     sim = util.pytorch_cos_sim(nrk_it.nrk_embed, search_df['svv_embed'].tolist())
     pos = np.argmax(sim).item()
-    return sim[0][pos], search_df.iloc[pos].recordId, search_df.iloc[pos].situationId
+    return sim[0][pos], search_df.iloc[pos].recordId, search_df.iloc[pos].situationId, search_df.iloc[
+        pos].concat_text, search_df.iloc[pos].overallStartTime
 
 
 def max_sim_sentence_transformer_precomputed(model, nrk_it, search_df):

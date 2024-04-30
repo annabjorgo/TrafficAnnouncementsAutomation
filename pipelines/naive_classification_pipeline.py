@@ -131,119 +131,61 @@ class NaiveBayesClassifier:
         self.run_model()
 
 
+def run_combination(file_name, model=""):
+    classifier = NaiveBayesClassifier(
+        '%stest.csv' % file_name,
+        '%strain.csv' % file_name,
+        number_removal=False, apply_stemming=True,
+        apply_stopwords=True, vectorization='count', model=model)
+    classifier.main()
+
+    classifier = NaiveBayesClassifier(
+        '%stest.csv' % file_name,
+        '%strain.csv' % file_name,
+        number_removal=True, apply_stemming=True,
+        apply_stopwords=True, vectorization='count', model=model)
+    classifier.main()
+
+    classifier = NaiveBayesClassifier(
+        '%stest.csv' % file_name,
+        '%strain.csv' % file_name,
+        number_removal=False, apply_stemming=True,
+        apply_stopwords=True, vectorization='tf-idf', model=model)
+    classifier.main()
+
+    classifier = NaiveBayesClassifier(
+        '%stest.csv' % file_name,
+        '%strain.csv' % file_name,
+        number_removal=True, apply_stemming=True,
+        apply_stopwords=True, vectorization='tf-idf', model=model)
+    classifier.main()
+
+    print("")
+
 if __name__ == '__main__':
-    medium_size = 'data/pipeline_runs/classification/threshold: 0.9, negative_size:30000 - d:24 m:4 h:8/'
-    big_size = 'data/pipeline_runs/classification/threshold: 0.9, negative_size:794873 - d:24 m:4 h:8/'
+    small_size = 'data/pipeline_runs/classification/threshold: 0.9, negative_size:30000 - d:24 m:4 h:8/'
+    medium_size = "data/pipeline_runs/classification/threshold: 0.9, negative_size:100000 - d:23 m:4 h:17/"
+    big_size ="data/pipeline_runs/classification/threshold: 0.9, negative_size:794873 - d:24 m:4 h:8/"
+    oversampled = 'data/pipeline_runs/classification/oversamplerd, threshold: 0.9, negative_size:794873 - d:25 m:4 h:11/'
+    oversampled_train = "data/pipeline_runs/classification/oversampled train,threshold: 0.9, negative_size:794873 - d:25 m:4 h:13/"
+    removed_night = "data/pipeline_runs/classification/remove_night_and_save_as_extra_validate, threshold: 0.9, negative_size:794873 - d:29 m:4 h:15/"
 
-    classifier = NaiveBayesClassifier(
-        '%stest.csv' % medium_size,
-        '%strain.csv' % medium_size,
-        number_removal=False, apply_stemming=True,
-        apply_stopwords=True, vectorization='count')
-    classifier.main()
+    run_combination(small_size)
+    run_combination(small_size,model="complementNB")
 
-    classifier = NaiveBayesClassifier(
-        '%stest.csv' % medium_size,
-        '%strain.csv' % medium_size,
-        number_removal=True, apply_stemming=True,
-        apply_stopwords=True, vectorization='count')
-    classifier.main()
 
-    classifier = NaiveBayesClassifier(
-        '%stest.csv' % big_size,
-        '%strain.csv' % big_size,
-        number_removal=False, apply_stemming=True,
-        apply_stopwords=True, vectorization='count')
-    classifier.main()
+    run_combination(medium_size)
+    run_combination(medium_size,model="complementNB")
 
-    classifier = NaiveBayesClassifier(
-        '%stest.csv' % big_size,
-        '%strain.csv' % big_size,
-        number_removal=True, apply_stemming=True,
-        apply_stopwords=True, vectorization='count')
-    classifier.main()
+    run_combination(big_size)
+    run_combination(big_size,model="complementNB")
 
-    classifier = NaiveBayesClassifier(
-        '%stest.csv' % medium_size,
-        '%strain.csv' % medium_size,
-        number_removal=False, apply_stemming=True,
-        apply_stopwords=True, vectorization='tf-idf')
-    classifier.main()
+    run_combination(oversampled_train)
+    run_combination(oversampled_train,model="complementNB")
 
-    classifier = NaiveBayesClassifier(
-        '%stest.csv' % medium_size,
-        '%strain.csv' % medium_size,
-        number_removal=True, apply_stemming=True,
-        apply_stopwords=True, vectorization='tf-idf')
-    classifier.main()
 
-    classifier = NaiveBayesClassifier(
-        '%stest.csv' % big_size,
-        '%strain.csv' % big_size,
-        number_removal=False, apply_stemming=True,
-        apply_stopwords=True, vectorization='tf-idf')
-    classifier.main()
+    run_combination(oversampled)
+    run_combination(oversampled, model="complementNB")
 
-    classifier = NaiveBayesClassifier(
-        '%stest.csv' % big_size,
-        '%strain.csv' % big_size,
-        number_removal=True, apply_stemming=True,
-        apply_stopwords=True, vectorization='tf-idf')
-    classifier.main()
-    #%%
-
-    classifier = NaiveBayesClassifier(
-        '%stest.csv' % medium_size,
-        '%strain.csv' % medium_size,
-        number_removal=False, apply_stemming=True,
-        apply_stopwords=True, vectorization='count', model="complementNB")
-    classifier.main()
-
-    classifier = NaiveBayesClassifier(
-        '%stest.csv' % medium_size,
-        '%strain.csv' % medium_size,
-        number_removal=True, apply_stemming=True,
-        apply_stopwords=True, vectorization='count', model="complementNB")
-    classifier.main()
-
-    classifier = NaiveBayesClassifier(
-        '%stest.csv' % big_size,
-        '%strain.csv' % big_size,
-        number_removal=False, apply_stemming=True,
-        apply_stopwords=True, vectorization='count', model="complementNB")
-    classifier.main()
-
-    classifier = NaiveBayesClassifier(
-        '%stest.csv' % big_size,
-        '%strain.csv' % big_size,
-        number_removal=True, apply_stemming=True,
-        apply_stopwords=True, vectorization='count', model="complementNB")
-    classifier.main()
-
-    classifier = NaiveBayesClassifier(
-        '%stest.csv' % medium_size,
-        '%strain.csv' % medium_size,
-        number_removal=False, apply_stemming=True,
-        apply_stopwords=True, vectorization='tf-idf', model="complementNB")
-    classifier.main()
-
-    classifier = NaiveBayesClassifier(
-        '%stest.csv' % medium_size,
-        '%strain.csv' % medium_size,
-        number_removal=True, apply_stemming=True,
-        apply_stopwords=True, vectorization='tf-idf', model="complementNB")
-    classifier.main()
-
-    classifier = NaiveBayesClassifier(
-        '%stest.csv' % big_size,
-        '%strain.csv' % big_size,
-        number_removal=False, apply_stemming=True,
-        apply_stopwords=True, vectorization='tf-idf', model="complementNB")
-    classifier.main()
-
-    classifier = NaiveBayesClassifier(
-        '%stest.csv' % big_size,
-        '%strain.csv' % big_size,
-        number_removal=True, apply_stemming=True,
-        apply_stopwords=True, vectorization='tf-idf', model="complementNB")
-    classifier.main()
+    run_combination(removed_night)
+    run_combination(removed_night, model="complementNB")
