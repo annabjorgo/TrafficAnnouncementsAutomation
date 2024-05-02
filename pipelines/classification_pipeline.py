@@ -14,6 +14,7 @@ from setfit import SetFitModel
 from transformers import AutoModelForSequenceClassification, Trainer, AutoTokenizer, TrainingArguments, \
     DataCollatorWithPadding, IntervalStrategy, ProgressCallback, DefaultDataCollator
 from transformers.trainer_utils import has_length
+from sklearn.metrics import classification_report
 
 # %%
 
@@ -65,7 +66,6 @@ def prepare_dataset():
         .map(preprocess_text, batched=True)
     test_data = load_dataset("csv", data_files=test_file) \
         .map(preprocess_text, batched=True)
-
     return train_data, test_data
 
 def pre_process_logits(pred, label):
@@ -73,6 +73,7 @@ def pre_process_logits(pred, label):
 
 def compute_metrics(eval_pred):
     predictions, labels = eval_pred
+    print(classification_report(y_pred=predictions, y_true=labels, labels=[0,1]))
     pr = precision.compute(predictions=predictions, references=labels)
     a = accuracy.compute(predictions=predictions, references=labels)
     r = recall.compute(predictions=predictions, references=labels)
@@ -85,20 +86,21 @@ def get_training_args(pre_model):
     return TrainingArguments(
         output_dir="model_run",
         logging_dir="model_run_logs",
-        per_device_train_batch_size=32,
+        per_device_train_batch_size=8,
         learning_rate=9e-6,
         dataloader_num_workers=4,
         do_train=True,
         num_train_epochs=1,
         weight_decay=0.01,
-        save_steps=0.06,
-        eval_steps=0.06,
+        save_steps=0.15,
+        eval_steps=0.15,
         evaluation_strategy="steps",
         save_strategy="steps",
         load_best_model_at_end=True,
         push_to_hub=False,
         save_total_limit=4,
-        run_name=f"{pre_model}-{sampling_type}",
+        run_name=f"{pre_model}",
+        report_to="wandb"
     )
 
 
@@ -108,7 +110,9 @@ def run_training(pre_model):
     tokenizer = AutoTokenizer.from_pretrained(pre_model)
     # data_collator = DefaultDataCollator()
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+
     print(f"Current training file {training_file}")
+
     tokenized_train, tokenized_test = prepare_dataset()
     print(f"Size of train dataset {len(tokenized_train['train'])}")
     print(f"Size of test dataset {len(tokenized_test['train'])}")
@@ -118,6 +122,7 @@ def run_training(pre_model):
         problem_type="single_label_classification"
     ).to(device)
 
+    wandb.init(reinit=True, project=project_name, notes=sampling_type, name=pre_model)
     trainer = Trainer(
         model=model,
         # model_init=model_init,
@@ -137,23 +142,23 @@ def run_training(pre_model):
     # trainer.hyperparameter_search(n_trials=5)
 
     trainer.train()
-    trainer.evaluate()
+    # trainer.evaluate(eval_dataset=tokenized_validate['train'])
+    wandb.finish()
 
 
 # %%
 if __name__ == '__main__':
-    os.environ['WANDB_PROJECT'] = "master-classification"
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     accuracy = evaluate.load("accuracy")
     precision = evaluate.load("precision")
     recall = evaluate.load("recall")
     f1 = evaluate.load("f1")
 
+    project_name = "m_classification_2nd"
     path_to_data = "data/pipeline_runs/classification/"
-    sampling_type = "remove_night_and_save_as_extra_validate, threshold: 0.9, negative_size:794873 - d:29 m:4 h:15/"
-    training_file = f"{path_to_data}{sampling_type}train.csv"
-    test_file = f"{path_to_data}{sampling_type}test.csv"
-    small_file = "data/pipeline_runs/classification/threshold: 0.9, negative_size:300000 - d:18 m:4 h:12/small.csv"
+    sampling_type = "no_night_100k_as_negative.csv"
+    training_file = f"{path_to_data}{sampling_type}"
+    test_file = f"{path_to_data}static_test.csv"
 
     curr_model = "bert-base-multilingual-cased"
     pre_model = curr_model
@@ -163,9 +168,8 @@ if __name__ == '__main__':
     pre_model = curr_model
     run_training(curr_model)
 
-    sampling_type = "remove_night_and_save_as_extra_validate, threshold: 0.9, negative_size:794873 - d:29 m:4 h:15/"
-    training_file = f"{path_to_data}{sampling_type}train.csv"
-    test_file = f"{path_to_data}{sampling_type}test.csv"
+    sampling_type = "no_night_after_2020_rest_90_percent.csv"
+    training_file = f"{path_to_data}{sampling_type}"
 
     curr_model = "bert-base-multilingual-cased"
     pre_model = curr_model
@@ -175,9 +179,8 @@ if __name__ == '__main__':
     pre_model = curr_model
     run_training(curr_model)
 
-    sampling_type ="night and 100000 as train, threshold: 0.9, negative_size:100000 - d:30 m:4 h:15"
-    training_file = f"{path_to_data}{sampling_type}train.csv"
-    test_file = f"{path_to_data}{sampling_type}test.csv"
+    sampling_type ="no_night_all_except_test.csv"
+    training_file = f"{path_to_data}{sampling_type}"
 
     curr_model = "bert-base-multilingual-cased"
     pre_model = curr_model

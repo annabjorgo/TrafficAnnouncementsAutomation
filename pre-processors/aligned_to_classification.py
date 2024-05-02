@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-# %%
 from pipelines.alignment_pipeline_utils import pipeline_starter, filter_pyspark_df, transform_for_alignment_e5
 
 
@@ -15,19 +14,17 @@ def load_and_preproc_data():
     annotated_df = pd.read_csv("data/pipeline_runs/alignment/annotated_alignment d:10 m:4 h:17.csv")
     no_df = pd.read_csv("data/pipeline_runs/alignment/no_alignment d:23 m:4 h:16.csv")
 
-    threshold = 0.9
     rows_to_publish = aligned_df[aligned_df['similarity'] > threshold][
         ['recordId', 'situationId', 'svv_text', 'svv_ts']].copy()
     rows_to_publish = rows_to_publish.rename(columns={"svv_text": 'concat_text', "svv_ts": 'overallStartTime'})
     rows_to_publish['post'] = 1
+    rows_to_publish['overallStartTime'] = pd.to_datetime(rows_to_publish['overallStartTime'])
 
     published_recordIds = list(set(list(aligned_df['recordId'])))
     published_situationIds = list(set(list(aligned_df['situationId'])))
-    seed_value = 42
 
     rows_not_publish = pd_df[
-        ~pd_df['recordId'].isin(published_recordIds) & ~pd_df['situationId'].isin(published_situationIds)].sample(
-        n=negative_size, random_state=seed_value).copy()
+        ~pd_df['recordId'].isin(published_recordIds) & ~pd_df['situationId'].isin(published_situationIds)]
     rows_not_publish['post'] = 0
 
     return rows_to_publish, rows_not_publish
@@ -74,8 +71,8 @@ def check_overlap(rows_to_publish, rows_not_publish):
 
 
 def create_small_file():
-    test_file = "data/pipeline_runs/classification/threshold: 0.9, negative_size:300000 - d:18 m:4 h:12/test.csv"
-    small_file = "data/pipeline_runs/classification/threshold: 0.9, negative_size:300000 - d:18 m:4 h:12/small.csv"
+    test_file = "data/pipeline_runs/classification/threshold: 0.9, negative_size:794873 - d:24 m:4 h:8/test.csv"
+    small_file = "data/pipeline_runs/classification/threshold: 0.9, negative_size:794873 - d:24 m:4 h:8/small.csv"
     pd.read_csv(test_file).sample(100).to_csv(small_file)
 
 
@@ -113,6 +110,7 @@ def remove_night_and_save_as_extra_validate():
     folder_name = save_to_csv(train, test, validate, "remove_night_and_save_as_extra_validate")
     to_validate.to_csv(f"{folder_name}night_validate.csv", index=False)
 
+
 def night_and_x_negative_as_train():
     rows_to_publish, rows_not_publish = load_and_preproc_data()
 
@@ -133,11 +131,77 @@ def night_and_x_negative_as_train():
     print_stat(train, test, validate, combined_df)
     folder_name = save_to_csv(train, test, validate, f"night and {negative_size} as train")
 
+
+def no_night_100k_as_negative():
+    test = pd.read_csv("data/pipeline_runs/classification/static_test.csv")
+    rows_to_publish, rows_not_publish = load_and_preproc_data()
+    rows_not_publish = records_withing_opening_hours(rows_not_publish)
+    rows_not_publish = rows_not_publish.sample(100_000, random_state=seed_value)
+
+    combined = concat_publish_not_publish(rows_not_publish, rows_to_publish)
+    rows_to_keep = ~combined.isin(test.to_dict(orient='list')).all(axis=1)
+    rest = combined[rows_to_keep]
+    print(f"Saving no_night_100k_as_negative, with size {len(rest)}, where post is {(len(rest[rest['post'] == 1]) / len(rest))} percent")
+    rest.to_csv("data/pipeline_runs/classification/no_night_100k_as_negative.csv", index=False)
+
+
+def no_night_all_except_test():
+    test = pd.read_csv("data/pipeline_runs/classification/static_test.csv")
+    rows_to_publish, rows_not_publish = load_and_preproc_data()
+    rows_not_publish = records_withing_opening_hours(rows_not_publish)
+
+    combined = concat_publish_not_publish(rows_not_publish, rows_to_publish)
+    rows_to_keep = ~combined.isin(test.to_dict(orient='list')).all(axis=1)
+    rest = combined[rows_to_keep]
+    print(f"Saving no_night_all_except_test, with size {len(rest)}, where post is {(len(rest[rest['post'] == 1]) / len(rest))} percent")
+    rest.to_csv("data/pipeline_runs/classification/no_night_all_except_test.csv", index=False)
+
+
+def no_night_after_2020_rest_90_percent():
+    test = pd.read_csv("data/pipeline_runs/classification/static_test.csv")
+    rows_to_publish, rows_not_publish = load_and_preproc_data()
+    rows_not_publish = records_withing_opening_hours(rows_not_publish)
+
+    combined = concat_publish_not_publish(rows_not_publish, rows_to_publish)
+    combined = combined[combined['overallStartTime'].dt.year > 2020]
+
+    rows_to_keep = ~combined.isin(test.to_dict(orient='list')).all(axis=1)
+    rest = combined[rows_to_keep]
+    print(f"Saving no_night_after_2020_rest_90_percent, with size {len(rest)}, where post is {(len(rest[rest['post'] == 1]) / len(rest))} percent")
+    rest.to_csv("data/pipeline_runs/classification/no_night_after_2020_rest_90_percent.csv", index=False)
+
+
+def concat_publish_not_publish(rows_not_publish, rows_to_publish):
+    return pd.concat([rows_to_publish, rows_not_publish])
+
+
+def create_static_test():
+    # Only take incidents occuring during NRK's opening hours
+    # Take the most recent data, incidents occuring after 2020
+    # Sample 10% with a natural distribution
+    rows_to_publish, rows_not_publish = load_and_preproc_data()
+
+    rows_not_publish = records_withing_opening_hours(rows_not_publish)
+    combined = concat_publish_not_publish(rows_not_publish, rows_to_publish)
+    combined = combined[combined['overallStartTime'].dt.year > 2020]
+
+    test = combined.sample(frac=0.1, random_state=seed_value)
+    print(f"Percent to post {len(test[test['post'] == 1]) / len(test)} for static test")
+    print(f"Size of test {len(test)}")
+    test.to_csv("data/pipeline_runs/classification/static_test.csv", index=False)
+
+
+def records_withing_opening_hours(rows_not_publish):
+    rows_not_publish = rows_not_publish[
+        ((rows_not_publish['overallStartTime'].dt.hour > 6) | (rows_not_publish['overallStartTime'].dt.hour < 22))]
+    return rows_not_publish
+
+
 if __name__ == '__main__':
     global df
     threshold = 0.9
     seed_value = 42
-    negative_size = 100_000
+    negative_size = 740_000
     train_size = 0.6
     test_and_val_size = 0.8  # 20% for each
     folder_name = f'data/pipeline_runs/classification/threshold: {threshold}, negative_size:{negative_size} - d:{datetime.datetime.now().day} m:{datetime.datetime.now().month} h:{datetime.datetime.now().hour}/'
@@ -150,4 +214,9 @@ if __name__ == '__main__':
     # oversample_train()
     # oversample_all()
     # remove_night_and_save_as_extra_validate()
-    night_and_x_negative_as_train()
+    # night_and_x_negative_as_train()
+
+    # create_static_test()
+    # no_night_after_2020_rest_90_percent()
+    # no_night_all_except_test()
+    # no_night_100k_as_negative()

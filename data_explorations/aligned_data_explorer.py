@@ -18,8 +18,8 @@ annotated_df = pd.read_csv("data/pipeline_runs/alignment/annotated_alignment d:1
 def merge_annotated():
     r = annotated_df[(annotated_df['correct'] == "1") | (annotated_df['correct'] == "0")]
     t = pd.merge(aligned_df, r[['nrk_id', 'correct']], on="nrk_id", how="inner")
-    t.to_csv("data/pipeline_runs/alignment/annotated_alignment d:10 m:4 h:17.csv", index=False)
-
+    t.to_csv("data/pipeline_runs/alignment/annotated_alignment d:23 m:4 h:16.csv", index=False)
+merge_annotated()
 
 # %%
 
@@ -111,24 +111,26 @@ def all_aligned_stats():
     print(
         annotated_df[annotated_df['correct'] == 1]['similarity'].hist())
 
-    tikzplotlib.save(f"correctly aligned incidents histogram.tex")
+    # tikzplotlib.save(f"correctly aligned incidents histogram.tex")
+    plt.show()
     plt.clf()
     plt.cla()
     plt.close()
-    # plt.show()
 
     annotated_df[annotated_df['correct'] == 0]['similarity'].hist()
-    tikzplotlib.save(f"incorrectly aligned incidents histogram.tex")
+    # tikzplotlib.save(f"incorrectly aligned incidents histogram.tex")
+    plt.show()
     plt.clf()
     plt.cla()
     plt.close()
-    # plt.show()
 
     aligned_df['similarity'].hist()
-    tikzplotlib.save(f"aligned incidents histogram.tex")
+    plt.show()
+    # tikzplotlib.save(f"aligned incidents histogram.tex")
     plt.clf()
     plt.cla()
     plt.close()
+all_aligned_stats()
 #%%
 def above_9_stats():
     print(len(annotated_above_9_df[annotated_above_9_df['Kolonne1'] == 1]) / len(annotated_above_9_df))
@@ -137,6 +139,6 @@ def above_9_stats():
     print(annotated_above_9_df[annotated_above_9_df['Kolonne1'] == 1]['similarity'].mean())
     print(annotated_above_9_df[annotated_above_9_df['Kolonne1'] == 2]['similarity'].mean())
 
-above_9_stats()
+# above_9_stats()
 
 #%%
