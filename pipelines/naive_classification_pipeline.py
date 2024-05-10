@@ -75,7 +75,7 @@ class NaiveBayesClassifier:
 
         # Apply Naive Bayes
         if self.vectorization == 'count':
-            model = make_pipeline(CountVectorizer(stop_words=self.stopwords), self.model)
+            model = make_pipeline(CountVectorizer(ngram_range=(1,3), stop_words=self.stopwords), self.model)
         else:
             model = make_pipeline(TfidfVectorizer(stop_words=self.stopwords), self.model)
 

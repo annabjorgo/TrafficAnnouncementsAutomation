@@ -13,14 +13,17 @@ from optuna import Trial
 from setfit import SetFitModel
 from transformers import AutoModelForSequenceClassification, Trainer, AutoTokenizer, TrainingArguments, \
     DataCollatorWithPadding, IntervalStrategy, ProgressCallback, DefaultDataCollator
+from transformers.integrations import WandbCallback
 from transformers.trainer_utils import has_length
 from sklearn.metrics import classification_report
+from sklearn.utils.class_weight import compute_class_weight
 
 # %%
 
 # %%
 label2id = {'post': 1, 'discard': 0}
 id2label = {1: 'post', 0: 'discard'}
+
 
 class ProgressOverider(ProgressCallback):
     def on_prediction_step(self, args, state, control, eval_dataloader=None, **kwargs):
@@ -31,19 +34,43 @@ class ProgressOverider(ProgressCallback):
                 )
             self.prediction_bar.update(1)
 
-#%%
+
+class TrainerOverrider(Trainer):
+
+    def compute_loss(self, model, inputs, return_outputs=False):
+        labels = inputs.get("labels")
+        labels = torch.eye(2, device="cuda:0")[labels]
+        outputs = model(**inputs)
+        logits = outputs.get('logits')
+        loss = torch.nn.BCEWithLogitsLoss(weight=torch.tensor([0.797875, 1.33927822])).cuda()
+        loss = loss(logits.squeeze(), labels.squeeze())
+        return (loss, outputs) if return_outputs else loss
+
+
+# %%
 
 def optuna_hp_space(trial):
     return {
         "learning_rate": trial.suggest_float("learning_rate", 9e-8, 1e-3, log=True),
     }
 
+
 def wandb_hp_space(trial):
     return {
-        "method": "random",
+        "project": project_name,
+        "description": pre_model,
+        "method": "bayes",
         "metric": {"name": "precision", "goal": "maximize"},
         "parameters": {
             "learning_rate": {"distribution": "uniform", "min": 1e-8, "max": 1e-5},
+            "batch_size": {
+                "distribution": "q_log_uniform_values",
+                "max": 64,
+                "min": 8,
+                "q": 8,
+            },
+            "dropout": {"values": [0.3, 0.4, 0.5]},
+            "optimizer": {"values": ["adamw"]},
         },
     }
 
@@ -51,7 +78,9 @@ def wandb_hp_space(trial):
 def model_init(trial):
     return AutoModelForSequenceClassification.from_pretrained(
         pre_model, num_labels=2, id2label=id2label, label2id=label2id, trust_remote_code=True,
+        problem_type="single_label_classification"
     ).to(device)
+
 
 def preprocess_text(df):
     # TODO: should i use [CLS] and such here
@@ -68,12 +97,14 @@ def prepare_dataset():
         .map(preprocess_text, batched=True)
     return train_data, test_data
 
+
 def pre_process_logits(pred, label):
     return torch.argmax(pred, axis=1)
 
+
 def compute_metrics(eval_pred):
     predictions, labels = eval_pred
-    print(classification_report(y_pred=predictions, y_true=labels, labels=[0,1]))
+    print(classification_report(y_pred=predictions, y_true=labels, labels=[0, 1]))
     pr = precision.compute(predictions=predictions, references=labels)
     a = accuracy.compute(predictions=predictions, references=labels)
     r = recall.compute(predictions=predictions, references=labels)
@@ -81,16 +112,15 @@ def compute_metrics(eval_pred):
     return {**a, **pr, **r, **f}
 
 
-
 def get_training_args(pre_model):
     return TrainingArguments(
         output_dir="model_run",
         logging_dir="model_run_logs",
-        per_device_train_batch_size=8,
+        per_device_train_batch_size=32,
         learning_rate=9e-6,
         dataloader_num_workers=4,
         do_train=True,
-        num_train_epochs=1,
+        num_train_epochs=5,
         weight_decay=0.01,
         save_steps=0.15,
         eval_steps=0.15,
@@ -117,13 +147,16 @@ def run_training(pre_model):
     print(f"Size of train dataset {len(tokenized_train['train'])}")
     print(f"Size of test dataset {len(tokenized_test['train'])}")
 
+    class_weights = compute_class_weight(class_weight="balanced", y=tokenized_train['train']['label'],
+                                         classes=np.unique(tokenized_train['train']['label']))
+
     model = AutoModelForSequenceClassification.from_pretrained(
         pre_model, num_labels=2, id2label=id2label, label2id=label2id, trust_remote_code=True,
         problem_type="single_label_classification"
     ).to(device)
 
     wandb.init(reinit=True, project=project_name, notes=sampling_type, name=pre_model)
-    trainer = Trainer(
+    trainer = TrainerOverrider(
         model=model,
         # model_init=model_init,
         args=get_training_args(pre_model),
@@ -133,13 +166,14 @@ def run_training(pre_model):
         data_collator=data_collator,
         compute_metrics=compute_metrics,
         preprocess_logits_for_metrics=pre_process_logits,
+        callbacks=[WandbCallback]
     )
 
     # progress_callback = next(filter(lambda x: isinstance(x, ProgressCallback), trainer.callback_handler.callbacks),
     #                              None)
     # trainer.remove_callback(progress_callback)
     # trainer.add_callback(ProgressOverider)
-    # trainer.hyperparameter_search(n_trials=5)
+    # trainer.hyperparameter_search(n_trials=5, backend="wandb", hp_space=wandb_hp_space)
 
     trainer.train()
     # trainer.evaluate(eval_dataset=tokenized_validate['train'])
@@ -168,6 +202,10 @@ if __name__ == '__main__':
     pre_model = curr_model
     run_training(curr_model)
 
+    curr_model = "ltg/norbert3-base"
+    pre_model = curr_model
+    run_training(curr_model)
+
     sampling_type = "no_night_after_2020_rest_90_percent.csv"
     training_file = f"{path_to_data}{sampling_type}"
 
@@ -179,7 +217,11 @@ if __name__ == '__main__':
     pre_model = curr_model
     run_training(curr_model)
 
-    sampling_type ="no_night_all_except_test.csv"
+    curr_model = "ltg/norbert3-base"
+    pre_model = curr_model
+    run_training(curr_model)
+
+    sampling_type = "no_night_all_except_test.csv"
     training_file = f"{path_to_data}{sampling_type}"
 
     curr_model = "bert-base-multilingual-cased"
@@ -187,5 +229,9 @@ if __name__ == '__main__':
     run_training(curr_model)
 
     curr_model = "ltg/norbert3-large"
+    pre_model = curr_model
+    run_training(curr_model)
+
+    curr_model = "ltg/norbert3-base"
     pre_model = curr_model
     run_training(curr_model)
