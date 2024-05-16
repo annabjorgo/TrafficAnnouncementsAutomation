@@ -38,6 +38,7 @@ class NaiveBayesClassifier:
         self.accuracy = evaluate.load("accuracy")
         self.precision = evaluate.load("precision")
         self.recall = evaluate.load("recall")
+        self.f1 = evaluate.load("f1")
 
         self.dataset_train = dataset_train
         self.number_removal = number_removal
@@ -85,11 +86,12 @@ class NaiveBayesClassifier:
         accuracy = self.accuracy.compute(references=y_test, predictions=y_pred)['accuracy']
         precision = self.precision.compute(references=y_test, predictions=y_pred)['precision']
         recall = self.recall.compute(references=y_test, predictions=y_pred)['recall']
+        f1 = self.f1.compute(references=y_test, predictions=y_pred)['f1']
 
         report = classification_report(y_test, y_pred)
         # print(report)
 
-        self.print_scores(accuracy, precision, recall)
+        self.print_scores(accuracy, precision, recall, f1)
 
         # Find the incorrect predictions
         incorrect_entries = [index for index, (true, pred) in enumerate(zip(y_test, y_pred)) if true != pred]
@@ -101,14 +103,14 @@ class NaiveBayesClassifier:
         if self.save_false_predictions:
             self.incorrect_texts(incorrect_texts, true_labels, pred_labels)
 
-    def print_scores(self, accuracy, precision, recall):
+    def print_scores(self, accuracy, precision, recall, f1):
         # number_removal=True, apply_stemming=True, apply_stopwords=True, vectorization='bow'
         variables = ["Model", "Train Dataset", "Number Removal", "Stemming", "Stopwords", "Vectorization", "Accuracy",
-                     "Precision", "Recall"]
+                     "Precision", "Recall", "F1"]
         values = [
             [self.model, self.dataset_train, self.number_removal, self.apply_stemming, self.apply_stopwords,
              self.vectorization,
-             accuracy, precision, recall]]
+             accuracy, precision, recall, f1]]
 
         print(tabulate(values, headers=variables, tablefmt='grid'))
 
@@ -133,29 +135,29 @@ class NaiveBayesClassifier:
 
 def run_combination(file_name, model=""):
     classifier = NaiveBayesClassifier(
-        '%stest.csv' % file_name,
-        '%strain.csv' % file_name,
+        test_file,
+       file_name,
         number_removal=False, apply_stemming=True,
         apply_stopwords=True, vectorization='count', model=model)
     classifier.main()
 
     classifier = NaiveBayesClassifier(
-        '%stest.csv' % file_name,
-        '%strain.csv' % file_name,
+        test_file,
+       file_name,
         number_removal=True, apply_stemming=True,
         apply_stopwords=True, vectorization='count', model=model)
     classifier.main()
 
     classifier = NaiveBayesClassifier(
-        '%stest.csv' % file_name,
-        '%strain.csv' % file_name,
+        test_file,
+       file_name,
         number_removal=False, apply_stemming=True,
         apply_stopwords=True, vectorization='tf-idf', model=model)
     classifier.main()
 
     classifier = NaiveBayesClassifier(
-        '%stest.csv' % file_name,
-        '%strain.csv' % file_name,
+        test_file,
+        file_name,
         number_removal=True, apply_stemming=True,
         apply_stopwords=True, vectorization='tf-idf', model=model)
     classifier.main()
@@ -163,29 +165,25 @@ def run_combination(file_name, model=""):
     print("")
 
 if __name__ == '__main__':
-    small_size = 'data/pipeline_runs/classification/threshold: 0.9, negative_size:30000 - d:24 m:4 h:8/'
-    medium_size = "data/pipeline_runs/classification/threshold: 0.9, negative_size:100000 - d:23 m:4 h:17/"
-    big_size ="data/pipeline_runs/classification/threshold: 0.9, negative_size:794873 - d:24 m:4 h:8/"
-    oversampled = 'data/pipeline_runs/classification/oversamplerd, threshold: 0.9, negative_size:794873 - d:25 m:4 h:11/'
-    oversampled_train = "data/pipeline_runs/classification/oversampled train,threshold: 0.9, negative_size:794873 - d:25 m:4 h:13/"
-    removed_night = "data/pipeline_runs/classification/remove_night_and_save_as_extra_validate, threshold: 0.9, negative_size:794873 - d:29 m:4 h:15/"
+    path_to_data = "data/pipeline_runs/classification/"
+    test_file = f"{path_to_data}static_test.csv"
 
-    run_combination(small_size)
-    run_combination(small_size,model="complementNB")
+    sampling_type = "no_night_100k_as_negative.csv"
+    night_100k = f"{path_to_data}{sampling_type}"
 
+    sampling_type = "no_night_after_2020_rest_90_percent.csv"
+    rest_90 = f"{path_to_data}{sampling_type}"
 
-    run_combination(medium_size)
-    run_combination(medium_size,model="complementNB")
+    sampling_type = "no_night_all_except_test.csv"
+    all_except = f"{path_to_data}{sampling_type}"
 
-    run_combination(big_size)
-    run_combination(big_size,model="complementNB")
-
-    run_combination(oversampled_train)
-    run_combination(oversampled_train,model="complementNB")
+    run_combination(night_100k)
+    run_combination(night_100k,model="complementNB")
 
 
-    run_combination(oversampled)
-    run_combination(oversampled, model="complementNB")
+    run_combination(rest_90)
+    run_combination(rest_90,model="complementNB")
 
-    run_combination(removed_night)
-    run_combination(removed_night, model="complementNB")
+    run_combination(all_except)
+    run_combination(all_except,model="complementNB")
+

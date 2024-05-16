@@ -37,12 +37,16 @@ class ProgressOverider(ProgressCallback):
 
 class TrainerOverrider(Trainer):
 
+    def __init__(self, class_weights, *args, **kwargs):
+        self.class_weights = class_weights
+        super().__init__(*args, **kwargs)
+
     def compute_loss(self, model, inputs, return_outputs=False):
         labels = inputs.get("labels")
         labels = torch.eye(2, device="cuda:0")[labels]
         outputs = model(**inputs)
         logits = outputs.get('logits')
-        loss = torch.nn.BCEWithLogitsLoss(weight=torch.tensor([0.797875, 1.33927822])).cuda()
+        loss = torch.nn.BCEWithLogitsLoss(weight=torch.tensor(self.class_weights)).cuda()
         loss = loss(logits.squeeze(), labels.squeeze())
         return (loss, outputs) if return_outputs else loss
 
@@ -117,7 +121,7 @@ def get_training_args(pre_model):
         output_dir="model_run",
         logging_dir="model_run_logs",
         per_device_train_batch_size=32,
-        learning_rate=9e-6,
+        learning_rate=lr if lr is not None else 9e-6,
         dataloader_num_workers=4,
         do_train=True,
         num_train_epochs=5,
@@ -144,18 +148,20 @@ def run_training(pre_model):
     print(f"Current training file {training_file}")
 
     tokenized_train, tokenized_test = prepare_dataset()
-    print(f"Size of train dataset {len(tokenized_train['train'])}")
-    print(f"Size of test dataset {len(tokenized_test['train'])}")
-
     class_weights = compute_class_weight(class_weight="balanced", y=tokenized_train['train']['label'],
                                          classes=np.unique(tokenized_train['train']['label']))
+    class_weights = [0.80, 1.34]
 
     model = AutoModelForSequenceClassification.from_pretrained(
         pre_model, num_labels=2, id2label=id2label, label2id=label2id, trust_remote_code=True,
-        problem_type="single_label_classification"
     ).to(device)
 
     wandb.init(reinit=True, project=project_name, notes=sampling_type, name=pre_model)
+    model_output_folder = f"model_run/{wandb.run.id}"
+
+    if not os.path.exists(model_output_folder):
+        os.mkdir(model_output_folder)
+
     trainer = TrainerOverrider(
         model=model,
         # model_init=model_init,
@@ -166,17 +172,18 @@ def run_training(pre_model):
         data_collator=data_collator,
         compute_metrics=compute_metrics,
         preprocess_logits_for_metrics=pre_process_logits,
-        callbacks=[WandbCallback]
+        callbacks=[WandbCallback],
+        class_weights=class_weights
     )
 
-    # progress_callback = next(filter(lambda x: isinstance(x, ProgressCallback), trainer.callback_handler.callbacks),
-    #                              None)
-    # trainer.remove_callback(progress_callback)
-    # trainer.add_callback(ProgressOverider)
     # trainer.hyperparameter_search(n_trials=5, backend="wandb", hp_space=wandb_hp_space)
+    print(f"Size of train dataset {len(tokenized_train['train'])}")
+    print(f"Size of test dataset {len(tokenized_test['train'])}")
+    print(f"Class weights: {class_weights}")
 
     trainer.train()
-    # trainer.evaluate(eval_dataset=tokenized_validate['train'])
+    trainer.save_model(model_output_folder)
+
     wandb.finish()
 
 
@@ -188,50 +195,44 @@ if __name__ == '__main__':
     recall = evaluate.load("recall")
     f1 = evaluate.load("f1")
 
-    project_name = "m_classification_2nd"
+    project_name = "m_classification_3rd"
     path_to_data = "data/pipeline_runs/classification/"
-    sampling_type = "no_night_100k_as_negative.csv"
-    training_file = f"{path_to_data}{sampling_type}"
     test_file = f"{path_to_data}static_test.csv"
 
-    curr_model = "bert-base-multilingual-cased"
-    pre_model = curr_model
-    run_training(curr_model)
-
-    curr_model = "ltg/norbert3-large"
-    pre_model = curr_model
-    run_training(curr_model)
-
-    curr_model = "ltg/norbert3-base"
-    pre_model = curr_model
-    run_training(curr_model)
-
-    sampling_type = "no_night_after_2020_rest_90_percent.csv"
+    sampling_type = "no_night_100k_as_negative.csv"
     training_file = f"{path_to_data}{sampling_type}"
 
-    curr_model = "bert-base-multilingual-cased"
-    pre_model = curr_model
-    run_training(curr_model)
-
+    lr = 2e-5
     curr_model = "ltg/norbert3-large"
     pre_model = curr_model
     run_training(curr_model)
 
-    curr_model = "ltg/norbert3-base"
+    curr_model = "bert-base-multilingual-cased"
+    pre_model = curr_model
+    run_training(curr_model)
+
+
+    sampling_type = "no_night_after_2020_rest_90_percent.csv"
+    save_path = "model_run/{}"
+    training_file = f"{path_to_data}{sampling_type}"
+
+    lr = 2e-5
+    curr_model = "ltg/norbert3-large"
+    pre_model = curr_model
+    run_training(curr_model)
+
+    curr_model = "bert-base-multilingual-cased"
     pre_model = curr_model
     run_training(curr_model)
 
     sampling_type = "no_night_all_except_test.csv"
     training_file = f"{path_to_data}{sampling_type}"
 
-    curr_model = "bert-base-multilingual-cased"
-    pre_model = curr_model
-    run_training(curr_model)
-
+    lr = 2e-5
     curr_model = "ltg/norbert3-large"
     pre_model = curr_model
     run_training(curr_model)
 
-    curr_model = "ltg/norbert3-base"
+    curr_model = "bert-base-multilingual-cased"
     pre_model = curr_model
     run_training(curr_model)
