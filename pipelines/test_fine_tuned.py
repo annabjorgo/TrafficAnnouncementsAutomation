@@ -21,9 +21,10 @@ import pandas as pd
 from pipelines.classification_pipeline import compute_metrics, pre_process_logits
 
 # %%
-id = '5zx7kxzw'
+id = '3px1kuph'
 path = "model_run/"
-test_file = f"data/pipeline_runs/classification/static_test.csv"
+category = "without_night/"
+test_file = f"data/pipeline_runs/classification/{category}static_test.csv"
 accuracy = evaluate.load("accuracy")
 precision = evaluate.load("precision")
 recall = evaluate.load("recall")
@@ -57,7 +58,7 @@ test_dataloader = DataLoader(test_data['train'], batch_size=8, collate_fn=data_c
 # %%
 def compute_metrics(eval_pred):
     predictions, labels = eval_pred
-    print(classification_report(y_pred=predictions, y_true=labels, labels=[0, 1]))
+    print("\n" + classification_report(y_pred=predictions, y_true=labels, labels=[0, 1]))
     pr = precision.compute(predictions=predictions, references=labels)
     a = accuracy.compute(predictions=predictions, references=labels)
     r = recall.compute(predictions=predictions, references=labels)
@@ -96,9 +97,11 @@ trainer = Trainer(
     callbacks=[WandbCallback],
 )
 #%%
+print(f"Predicting on {test_file} with run {id}")
+
 out = trainer.predict(test_data['train'])
 test_df = pd.DataFrame(test_data['train'])
 test_df['prediction'] = out.predictions
-
+print(out.metrics)
 sampled_df = test_df.sample(n=200, random_state=42)
-sampled_df.to_csv("data/pipeline_runs/classification/sample.csv")
+sampled_df.to_csv(f"data/pipeline_runs/classification/samples/{id}_sample.csv")

@@ -120,11 +120,11 @@ def get_training_args(pre_model):
     return TrainingArguments(
         output_dir="model_run",
         logging_dir="model_run_logs",
-        per_device_train_batch_size=32,
-        learning_rate=lr if lr is not None else 9e-6,
+        per_device_train_batch_size=16,
+        learning_rate=lr if lr is not None else 5e-5,
         dataloader_num_workers=4,
         do_train=True,
-        num_train_epochs=5,
+        num_train_epochs=epoch if epoch is not None else 1,
         weight_decay=0.01,
         save_steps=0.15,
         eval_steps=0.15,
@@ -138,7 +138,7 @@ def get_training_args(pre_model):
     )
 
 
-def run_training(pre_model):
+def run_training(pre_model, class_weight=None):
     print(f"started fine-tuning {pre_model}")
     global tokenizer
     tokenizer = AutoTokenizer.from_pretrained(pre_model)
@@ -148,15 +148,15 @@ def run_training(pre_model):
     print(f"Current training file {training_file}")
 
     tokenized_train, tokenized_test = prepare_dataset()
-    class_weights = compute_class_weight(class_weight="balanced", y=tokenized_train['train']['label'],
-                                         classes=np.unique(tokenized_train['train']['label']))
-    class_weights = [0.80, 1.34]
+    if class_weight is None:
+        class_weights = compute_class_weight(class_weight="balanced", y=tokenized_train['train']['label'],
+                                             classes=np.unique(tokenized_train['train']['label']))
 
     model = AutoModelForSequenceClassification.from_pretrained(
         pre_model, num_labels=2, id2label=id2label, label2id=label2id, trust_remote_code=True,
     ).to(device)
 
-    wandb.init(reinit=True, project=project_name, notes=sampling_type, name=pre_model)
+    wandb.init(reinit=True, project=project_name, notes=f"{class_weights}_{sampling_type}_{category}", name=pre_model)
     model_output_folder = f"model_run/{wandb.run.id}"
 
     if not os.path.exists(model_output_folder):
@@ -195,14 +195,62 @@ if __name__ == '__main__':
     recall = evaluate.load("recall")
     f1 = evaluate.load("f1")
 
-    project_name = "m_classification_3rd"
-    path_to_data = "data/pipeline_runs/classification/"
+    project_name = "m_classification_4th"
+
+    lr = 2e-5
+    epoch = 5
+
+    category = "without_night"
+    path_to_data = f"data/pipeline_runs/classification/{category}/"
+    test_file = f"{path_to_data}static_test.csv"
+    print(f"Currently running on {category}, with path {path_to_data}")
+
+    sampling_type = "100k_as_negative.csv"
+    training_file = f"{path_to_data}{sampling_type}"
+
+    curr_model = "ltg/norbert3-large"
+    pre_model = curr_model
+    run_training(curr_model)
+
+    curr_model = "bert-base-multilingual-cased"
+    pre_model = curr_model
+    run_training(curr_model)
+
+
+    sampling_type = "after_2020_rest_90_percent.csv"
+    training_file = f"{path_to_data}{sampling_type}"
+
+    curr_model = "ltg/norbert3-large"
+    pre_model = curr_model
+    run_training(curr_model)
+
+    curr_model = "bert-base-multilingual-cased"
+    pre_model = curr_model
+    run_training(curr_model)
+
+
+
+    sampling_type = "all_except_test.csv"
+    training_file = f"{path_to_data}{sampling_type}"
+
+    curr_model = "ltg/norbert3-large"
+    pre_model = curr_model
+    run_training(curr_model)
+
+    curr_model = "bert-base-multilingual-cased"
+    pre_model = curr_model
+    run_training(curr_model)
+#%%
+
+    category = "with_night"
+    path_to_data = f"data/pipeline_runs/classification/{category}/"
     test_file = f"{path_to_data}static_test.csv"
 
-    sampling_type = "no_night_100k_as_negative.csv"
+    print(f"Currently running on {category}, with path {path_to_data}")
+
+    sampling_type = "100k_as_negative.csv"
     training_file = f"{path_to_data}{sampling_type}"
 
-    lr = 2e-5
     curr_model = "ltg/norbert3-large"
     pre_model = curr_model
     run_training(curr_model)
@@ -212,11 +260,9 @@ if __name__ == '__main__':
     run_training(curr_model)
 
 
-    sampling_type = "no_night_after_2020_rest_90_percent.csv"
-    save_path = "model_run/{}"
+    sampling_type = "after_2020_rest_90_percent.csv"
     training_file = f"{path_to_data}{sampling_type}"
 
-    lr = 2e-5
     curr_model = "ltg/norbert3-large"
     pre_model = curr_model
     run_training(curr_model)
@@ -225,10 +271,11 @@ if __name__ == '__main__':
     pre_model = curr_model
     run_training(curr_model)
 
-    sampling_type = "no_night_all_except_test.csv"
+
+
+    sampling_type = "all_except_test.csv"
     training_file = f"{path_to_data}{sampling_type}"
 
-    lr = 2e-5
     curr_model = "ltg/norbert3-large"
     pre_model = curr_model
     run_training(curr_model)
