@@ -9,7 +9,7 @@ from rank_bm25 import BM25Okapi
 from pipelines.alignment_pipeline_utils import pipeline_starter, filter_pyspark_df, transfer_to_pandas_test, \
     align_data, \
     max_sim_sentence_transformer, max_sim_bm25, remove_stopwords_punctuation, split_sentences, embed_pandas, \
-    max_sim_jaccard, join_sentences
+    max_sim_jaccard, join_sentences, max_sim_sentence_transformer_precomputed
 from pipelines.alignment_result_utils import measure_accuracy, check_incorrect, print_incorrect
 #%%
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -19,7 +19,7 @@ df.persist()
 
 # %%
 
-df, link_df = filter_pyspark_df(df, df_tweet, link_dict, spark)
+df, link_df, df_tweet = filter_pyspark_df(df, df_tweet, link_dict, spark)
 pd_df, pd_link = transfer_to_pandas_test(df, link_df)
 # %%
 model_name = 'intfloat/multilingual-e5-large'
@@ -27,7 +27,7 @@ model = SentenceTransformer(model_name, device=device)
 pre_pro_pd_lin = pd_link.copy()
 pre_pro_pd_lin = embed_pandas(pre_pro_pd_lin, model)
 aligned = align_data(pre_pro_pd_lin, pd_df, timedelta=6, model=model,
-                     sim_func=max_sim_sentence_transformer)
+                     sim_func=max_sim_sentence_transformer,)
 print(f"\nAccuracy for {model_name}")
 correct, incorrect = measure_accuracy(aligned, pre_pro_pd_lin, df)
 joined_incorrect = check_incorrect(incorrect, pre_pro_pd_lin, pd_df)

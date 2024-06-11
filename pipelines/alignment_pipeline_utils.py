@@ -43,8 +43,12 @@ def pipeline_starter():
 
 
 def filter_pyspark_df(df, df_tweet, link_dict, spark):
-    df_tweet = df_tweet.where(sf.year('created_at') > 2015)
+    df_tweet = df_tweet.where(sf.year('created_at') > 2016)
+    df_tweet = df_tweet.filter(~sf.col("full_text").rlike(
+        "^https:\/\/t\.co\/[a-zA-Z0-9]+$"))  # To remove the tweets where only a url is contained
+
     link_df = spark.createDataFrame(link_dict.items(), schema=["nrk_id", "svv_id"])
+
     df = df.withColumn("dataProcessingNote",
                        sf.regexp_replace("dataProcessingNote", "Merk at sluttiden er usikker og kan endres.", "")) \
         .withColumn("dataProcessingNote", sf.regexp_replace("dataProcessingNote", "[|]", " "))
@@ -52,6 +56,7 @@ def filter_pyspark_df(df, df_tweet, link_dict, spark):
     df = df.where(sf.year("overallStartTime") > 2010)
     # todo: note; only using first location descriptor
     df = df.withColumn("concat_text", sf.concat_ws(", ", df.locations.locationDescriptor[0], df.concat_text))
+
     link_df = link_df.join(df_tweet, link_df.nrk_id == df_tweet.id).select("nrk_id", "svv_id",
                                                                            "full_text", "created_at").withColumnRenamed(
         "full_text", "nrk_text").withColumnRenamed("created_at", "nrk_created_at")
@@ -61,7 +66,7 @@ def filter_pyspark_df(df, df_tweet, link_dict, spark):
                                                                                                   "nrk_created_at",
                                                                                                   "situationId")
 
-    return df, link_df
+    return df, link_df, df_tweet
 
 
 def split_sentences(text_list):
@@ -122,24 +127,41 @@ def align_multi(q_df, svv_df, timedelta):
 
     return alignment
 
+
 def task(nrk_it, svv_df, time_window, alignment):
     search_df = svv_df[abs(svv_df['overallStartTime'] - nrk_it.nrk_created_at) <= time_window].copy()
     sim = util.pytorch_cos_sim(nrk_it.nrk_embed, search_df['svv_embed'].tolist())
     pos = np.argmax(sim).item()
     alignment.append((sim[0][pos], search_df.iloc[pos].recordId, search_df.iloc[pos].situationId))
 
+
 def align_data(q_df, svv_df, timedelta, model, sim_func):
     alignment = []
+    no_alignment = []
     time_window = pd.Timedelta(hours=timedelta)
 
     for nrk_it in tqdm(q_df.itertuples(), total=q_df.shape[0]):
         search_df = svv_df[abs(svv_df['overallStartTime'] - nrk_it.nrk_created_at) <= time_window].copy()
-        max_sim, svv_id, svv_situation = sim_func(model, nrk_it, search_df)
-        alignment.append(
-            {"nrk_id": nrk_it.nrk_id, "recordId": svv_id, "situationId": svv_situation, "similarity": max_sim})
+        if len(search_df) == 0:
+            print(f"Found no matching id for {nrk_it.nrk_id}")
+            no_alignment.append(
+                {"nrk_id": nrk_it.nrk_id, "recordId": svv_id, "situationId": svv_situation, "svv_text": svv_text,
+                 "nrk_text": nrk_it.full_text})
+            continue
 
-    tmp_df = pd.DataFrame(alignment, columns=(['nrk_id', 'prediction_svv_id', 'situationId', 'cos_sim']))
-    file_name = f'data/pipeline_runs/alignment d:{datetime.datetime.now().day} m:{datetime.datetime.now().month} h:{datetime.datetime.now().hour}.csv'
+        max_sim, svv_id, svv_situation, svv_text, svv_start_time = sim_func(model, nrk_it, search_df)
+        alignment.append(
+            {"nrk_id": nrk_it.nrk_id, "recordId": svv_id, "situationId": svv_situation, "similarity": max_sim,
+             "svv_text": svv_text, "nrk_text": nrk_it.full_text, "svv_ts": svv_start_time,
+             "nrk_ts": nrk_it.nrk_created_at})
+
+    tmp_df = pd.DataFrame(alignment)
+    file_name = f'data/pipeline_runs/alignment/alignment d:{datetime.datetime.now().day} m:{datetime.datetime.now().month} h:{datetime.datetime.now().hour}.csv'
+    tmp_df.to_csv(
+        file_name,
+        index=False)
+    tmp_df = pd.DataFrame(no_alignment)
+    file_name = f'data/pipeline_runs/alignment/no_alignment d:{datetime.datetime.now().day} m:{datetime.datetime.now().month} h:{datetime.datetime.now().hour}.csv'
     tmp_df.to_csv(
         file_name,
         index=False)
@@ -150,13 +172,15 @@ def max_sim_sentence_transformer(model, nrk_it, search_df):
     search_df['svv_embed'] = model.encode(search_df['concat_text'].tolist()).tolist()
     sim = util.pytorch_cos_sim(nrk_it.nrk_embed, search_df['svv_embed'].tolist())
     pos = np.argmax(sim).item()
-    return sim[0][pos], search_df.iloc[pos].recordId, search_df.iloc[pos].situationId
+    return sim[0][pos], search_df.iloc[pos].recordId, search_df.iloc[pos].situationId, search_df.iloc[
+        pos].concat_text, search_df.iloc[pos].overallStartTime
 
 
 def max_sim_sentence_transformer_precomputed(model, nrk_it, search_df):
     sim = util.pytorch_cos_sim(nrk_it.nrk_embed, search_df['svv_embed'].tolist())
     pos = np.argmax(sim).item()
-    return sim[0][pos], search_df.iloc[pos].recordId, search_df.iloc[pos].situationId
+    return sim[0][pos].item(), search_df.iloc[pos].recordId, search_df.iloc[pos].situationId, search_df.iloc[
+        pos].concat_text, search_df.iloc[pos].overallStartTime
 
 
 def max_sim_bm25(model, nrk_it, search_df):
