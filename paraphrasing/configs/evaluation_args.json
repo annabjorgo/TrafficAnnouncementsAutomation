@@ -1,0 +1,8 @@
+{
+    "model_path": "norallm/normistral-7b-warm",
+    "torch_dtype": "bfloat16",
+    "model_name": "normistral",
+    "date": "3004",
+    "peft_model_id": "models/uio-mistral_save_2905/checkpoint",
+    "max_length": 200
+}
