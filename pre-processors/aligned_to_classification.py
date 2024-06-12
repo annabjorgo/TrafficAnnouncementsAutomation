@@ -52,11 +52,13 @@ def no_night_100k_as_negative():
         rows_not_publish = records_withing_opening_hours(rows_not_publish)
         print(f"after {len(rows_not_publish)}")
 
-    rows_not_publish = rows_not_publish.sample(100_000, random_state=seed_value)
 
     combined = concat_publish_not_publish(rows_not_publish, rows_to_publish)
 
     rows_to_keep = remove_train_from_test_data(combined, test)
+
+    rows_not_publish = rows_not_publish.sample(100_000, random_state=seed_value)
+
     assert 0 == len(set(list(rows_to_keep['recordId'])).intersection(set(list(test['recordId']))))
 
     rows_to_keep = remove_train_from_test_data(rows_to_keep, test_night)
@@ -169,14 +171,14 @@ if __name__ == '__main__':
         df, link_df, df_tweet = filter_pyspark_df(df, df_tweet, link_dict, spark)
         pd_df, pd_df_tweet = transform_for_alignment_e5(df, df_tweet)
 
-    category = "without_night"
-    create_static_test()
-    no_night_after_2020_rest_90_percent()
-    no_night_all_except_test()
-    no_night_100k_as_negative()
-
-    category = "with_night"
-    create_static_test()
-    no_night_after_2020_rest_90_percent()
-    no_night_all_except_test()
-    no_night_100k_as_negative()
+    # category = "without_night"
+    # create_static_test()
+    # no_night_after_2020_rest_90_percent()
+    # no_night_all_except_test()
+    # no_night_100k_as_negative()
+    #
+    # category = "with_night"
+    # create_static_test()
+    # no_night_after_2020_rest_90_percent()
+    # no_night_all_except_test()
+    # no_night_100k_as_negative()

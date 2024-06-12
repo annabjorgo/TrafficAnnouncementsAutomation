@@ -138,7 +138,7 @@ def get_training_args(pre_model):
     )
 
 
-def run_training(pre_model, class_weight=None):
+def run_training(pre_model, class_weights=None):
     print(f"started fine-tuning {pre_model}")
     global tokenizer
     tokenizer = AutoTokenizer.from_pretrained(pre_model)
@@ -148,7 +148,7 @@ def run_training(pre_model, class_weight=None):
     print(f"Current training file {training_file}")
 
     tokenized_train, tokenized_test = prepare_dataset()
-    if class_weight is None:
+    if class_weights is None:
         class_weights = compute_class_weight(class_weight="balanced", y=tokenized_train['train']['label'],
                                              classes=np.unique(tokenized_train['train']['label']))
 
@@ -182,6 +182,7 @@ def run_training(pre_model, class_weight=None):
     print(f"Class weights: {class_weights}")
 
     trainer.train()
+    trainer.evaluate()
     trainer.save_model(model_output_folder)
 
     wandb.finish()
@@ -200,86 +201,18 @@ if __name__ == '__main__':
     lr = 2e-5
     epoch = 5
 
-    category = "without_night"
-    path_to_data = f"data/pipeline_runs/classification/{category}/"
-    test_file = f"{path_to_data}static_test.csv"
-    print(f"Currently running on {category}, with path {path_to_data}")
-
-    sampling_type = "100k_as_negative.csv"
-    training_file = f"{path_to_data}{sampling_type}"
-
-    curr_model = "ltg/norbert3-large"
-    pre_model = curr_model
-    run_training(curr_model)
-
-    curr_model = "bert-base-multilingual-cased"
-    pre_model = curr_model
-    run_training(curr_model)
-
-
-    sampling_type = "after_2020_rest_90_percent.csv"
-    training_file = f"{path_to_data}{sampling_type}"
-
-    curr_model = "ltg/norbert3-large"
-    pre_model = curr_model
-    run_training(curr_model)
-
-    curr_model = "bert-base-multilingual-cased"
-    pre_model = curr_model
-    run_training(curr_model)
-
-
-
-    sampling_type = "all_except_test.csv"
-    training_file = f"{path_to_data}{sampling_type}"
-
-    curr_model = "ltg/norbert3-large"
-    pre_model = curr_model
-    run_training(curr_model)
-
-    curr_model = "bert-base-multilingual-cased"
-    pre_model = curr_model
-    run_training(curr_model)
 #%%
 
     category = "with_night"
     path_to_data = f"data/pipeline_runs/classification/{category}/"
     test_file = f"{path_to_data}static_test.csv"
-
     print(f"Currently running on {category}, with path {path_to_data}")
-
-    sampling_type = "100k_as_negative.csv"
-    training_file = f"{path_to_data}{sampling_type}"
-
-    curr_model = "ltg/norbert3-large"
-    pre_model = curr_model
-    run_training(curr_model)
-
-    curr_model = "bert-base-multilingual-cased"
-    pre_model = curr_model
-    run_training(curr_model)
-
-
-    sampling_type = "after_2020_rest_90_percent.csv"
-    training_file = f"{path_to_data}{sampling_type}"
-
-    curr_model = "ltg/norbert3-large"
-    pre_model = curr_model
-    run_training(curr_model)
-
-    curr_model = "bert-base-multilingual-cased"
-    pre_model = curr_model
-    run_training(curr_model)
-
-
 
     sampling_type = "all_except_test.csv"
     training_file = f"{path_to_data}{sampling_type}"
-
-    curr_model = "ltg/norbert3-large"
-    pre_model = curr_model
-    run_training(curr_model)
+    class_weights = [1.0, 1.0]
 
     curr_model = "bert-base-multilingual-cased"
     pre_model = curr_model
-    run_training(curr_model)
+    run_training(curr_model, class_weights)
+

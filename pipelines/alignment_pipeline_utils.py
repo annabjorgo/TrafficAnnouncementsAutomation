@@ -139,7 +139,7 @@ def align_data(q_df, svv_df, timedelta, model, sim_func):
     alignment = []
     no_alignment = []
     time_window = pd.Timedelta(hours=timedelta)
-
+    q_df['full_text'] = q_df['nrk_text']
     for nrk_it in tqdm(q_df.itertuples(), total=q_df.shape[0]):
         search_df = svv_df[abs(svv_df['overallStartTime'] - nrk_it.nrk_created_at) <= time_window].copy()
         if len(search_df) == 0:

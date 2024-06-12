@@ -29,8 +29,10 @@ pre_pro_pd_lin = embed_pandas(pre_pro_pd_lin, model)
 aligned = align_data(pre_pro_pd_lin, pd_df, timedelta=6, model=model,
                      sim_func=max_sim_sentence_transformer,)
 print(f"\nAccuracy for {model_name}")
-correct, incorrect = measure_accuracy(aligned, pre_pro_pd_lin, df)
-joined_incorrect = check_incorrect(incorrect, pre_pro_pd_lin, pd_df)
+# correct, incorrect = measure_accuracy(aligned, pre_pro_pd_lin, df)
+# joined_incorrect = check_incorrect(incorrect, pre_pro_pd_lin, pd_df)
+
+record, situation, location = measure_accuracy(aligned, pre_pro_pd_lin, df)
 # print_incorrect(joined_incorrect)
 
 #%%

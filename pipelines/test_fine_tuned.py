@@ -1,29 +1,20 @@
-import os
-from typing import Any
-from typing import Dict, Union
-
 import evaluate
-import numpy as np
-from tqdm.auto import tqdm
-
-import torch
-import wandb
-from datasets import load_dataset
-from optuna import Trial
-from setfit import SetFitModel
-from transformers import AutoModelForSequenceClassification, Trainer, AutoTokenizer, TrainingArguments, \
-    DataCollatorWithPadding, IntervalStrategy, ProgressCallback, DefaultDataCollator
-from transformers.integrations import WandbCallback
-from transformers.trainer_utils import has_length
-from sklearn.metrics import classification_report
-from sklearn.utils.class_weight import compute_class_weight
 import pandas as pd
-from pipelines.classification_pipeline import compute_metrics, pre_process_logits
+import torch
+from datasets import load_dataset
+from matplotlib import pyplot as plt
+from sklearn.metrics import classification_report
+from transformers import AutoModelForSequenceClassification, Trainer, AutoTokenizer, TrainingArguments, \
+    DataCollatorWithPadding
+from transformers.integrations import WandbCallback
+import tikzplotlib
+
+from pipelines.classification_pipeline import pre_process_logits
 
 # %%
-id = '3px1kuph'
-path = "model_run/"
-category = "without_night/"
+id = '8s6rb80d'
+path = f"model_run/{id}"
+category = "with_night/"
 test_file = f"data/pipeline_runs/classification/{category}static_test.csv"
 accuracy = evaluate.load("accuracy")
 precision = evaluate.load("precision")
@@ -50,12 +41,12 @@ test_data = load_dataset("csv", data_files=test_file) \
 model = AutoModelForSequenceClassification.from_pretrained(
     path, num_labels=2, id2label=id2label, label2id=label2id, trust_remote_code=True,
 ).to(device)
-# %%
+
 from torch.utils.data import DataLoader
 
 data_collator = DataCollatorWithPadding(tokenizer)
 test_dataloader = DataLoader(test_data['train'], batch_size=8, collate_fn=data_collator)
-# %%
+
 def compute_metrics(eval_pred):
     predictions, labels = eval_pred
     print("\n" + classification_report(y_pred=predictions, y_true=labels, labels=[0, 1]))
@@ -104,4 +95,87 @@ test_df = pd.DataFrame(test_data['train'])
 test_df['prediction'] = out.predictions
 print(out.metrics)
 sampled_df = test_df.sample(n=200, random_state=42)
-sampled_df.to_csv(f"data/pipeline_runs/classification/samples/{id}_sample.csv")
+# sampled_df.to_csv(f"data/pipeline_runs/classification/samples/{id}_sample.csv")
+
+#%%
+test_df['hour'] = pd.to_datetime(test_df['overallStartTime']).dt.hour
+test_df['hour'].hist(bins=24, figsize=(10, 6), color='skyblue', edgecolor='black')
+plt.xlabel('Hour of the Day')
+plt.ylabel('Count')
+plt.title('Histogram of test data by Hour')
+plt.xticks(range(24))
+plt.grid(False)
+# plt.show()
+tikzplotlib.save(f"test_data_hour_histogram.tex")
+plt.clf()
+plt.cla()
+plt.close()
+
+test_df[test_df['post'] == 1]['hour'].hist(bins=24, figsize=(10, 6), color='skyblue', edgecolor='black')
+plt.xlabel('Hour of the Day')
+plt.ylabel('Count')
+plt.title('Histogram of test data to post by Hour')
+plt.xticks(range(24))
+plt.grid(False)
+# plt.show()
+tikzplotlib.save(f"test_data_post_hour_histogram.tex")
+plt.clf()
+plt.cla()
+plt.close()
+
+
+test_df[test_df['prediction'] == 1]['hour'].hist(bins=24, figsize=(10, 6), color='skyblue', edgecolor='black')
+plt.xlabel('Hour of the Day')
+plt.ylabel('Count')
+plt.title('Histogram of test data prediction by Hour')
+plt.xticks(range(24))
+plt.grid(False)
+# plt.show()
+tikzplotlib.save(f"test_data_prediction_hour_histogram.tex")
+plt.clf()
+plt.cla()
+plt.close()
+
+#%%
+test_df['w_day'] = pd.to_datetime(test_df['overallStartTime']).dt.dayofweek
+test_df['w_day'].hist(bins=7, figsize=(10, 6), color='skyblue', edgecolor='black')
+plt.xlabel('Day of week')
+plt.ylabel('Count')
+plt.title('Histogram of test data by day of week')
+plt.xticks(range(0,7))
+plt.grid(False)
+# plt.show()
+tikzplotlib.save(f"test_data_w_day_histogram.tex")
+
+plt.clf()
+plt.cla()
+plt.close()
+
+
+ax =test_df[test_df['post'] == 1]['w_day'].plot.hist(bins=7, figsize=(10, 6), color='skyblue', edgecolor='black')
+plt.xlabel('Day of week')
+plt.ylabel('Count')
+plt.title('Histogram of label test data by day of week')
+plt.xticks(range(0,7), ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'])
+plt.grid(False)
+# plt.show()
+tikzplotlib.save(f"test_data_label_w_day_histogram.tex")
+
+plt.clf()
+plt.cla()
+plt.close()
+
+ax =test_df[test_df['prediction'] == 1]['w_day'].plot.hist(bins=7, figsize=(10, 6), color='skyblue', edgecolor='black')
+plt.xlabel('Day of week')
+plt.ylabel('Count')
+plt.title('Histogram of prediction data by day of week')
+plt.xticks(range(0,7))
+plt.grid(False)
+# plt.show()
+tikzplotlib.save(f"test_data_prediction_w_day_histogram.tex")
+
+plt.clf()
+plt.cla()
+plt.close()
+#%%
+aa = test_df.sort_values(by=['post', 'concat_text'],ascending=[False, False] )

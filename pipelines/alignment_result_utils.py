@@ -46,12 +46,13 @@ def measure_accuracy(aligned_list, pd_link, df):
     record_id_list = correct_by_recordId(aligned_list)
     location_list = correct_by_location(aligned_list)
 
+
     correct_list = list({v['nrk_id']: v for v in (location_list + record_id_list + situation_id_list)}.values())
     incorrect_list = [item for item in aligned_list if item not in correct_list]
     avg_correct_similarity = sum(it['similarity'] for it in correct_list) / len(correct_list)
 
-    print(f"Accuracy for situationId: {len(situation_id_list) / len(aligned_list)}")
     print(f"Accuracy for recordId: {len(record_id_list) / len(aligned_list)}")
+    print(f"Accuracy for situationId: {len(situation_id_list) / len(aligned_list)}")
     print(f"Accuracy for location: {len(location_list) / len(aligned_list)}")
     print(f"Avg similarity: {avg_correct_similarity}")
 

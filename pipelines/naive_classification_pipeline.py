@@ -30,10 +30,13 @@ prediction_field = "post"
 
 class NaiveBayesClassifier:
     def __init__(self, dataset_test, dataset_train, number_removal=True, apply_stemming=True, apply_stopwords=True,
-                 vectorization='count', save_false_predictions=False, model="multinomial"):
+                 vectorization='count', save_false_predictions=False, model="multinomial", test_200=True):
         self.model = ComplementNB() if model == "complementNB" else MultinomialNB()
         self.df_train = pd.read_csv(dataset_train)
         self.df_test = pd.read_csv(dataset_test)
+
+        if test_200:
+            self.df_200= pd.read_csv("data/pipeline_runs/classification/annotated_200_only_night.csv")
 
         self.accuracy = evaluate.load("accuracy")
         self.precision = evaluate.load("precision")
@@ -52,18 +55,20 @@ class NaiveBayesClassifier:
     def pre_processing(self):
         self.df_train[text_field] = self.df_train[text_field].str.lower()
         self.df_test[text_field] = self.df_test[text_field].str.lower()
+        self.df_200[text_field] = self.df_200[text_field].str.lower()
 
         if self.number_removal:
             self.df_train[text_field] = self.df_train[text_field].apply(lambda x: re.sub(r'\d+', '', x))
             self.df_test[text_field] = self.df_test[text_field].apply(lambda x: re.sub(r'\d+', '', x))
+            self.df_200[text_field] = self.df_200[text_field].apply(lambda x: re.sub(r'\d+', '', x))
 
         if self.apply_stemming:
             self.df_train[text_field] = self.df_train[text_field].apply(
                 lambda x: ' '.join([self.stemmer.stem(token) for token in x.split()]))
             self.df_test[text_field] = self.df_test[text_field].apply(
                 lambda x: ' '.join([self.stemmer.stem(token) for token in x.split()]))
-
-        return self.df_train, self.df_test
+            self.df_200[text_field] = self.df_200[text_field].apply(
+                lambda x: ' '.join([self.stemmer.stem(token) for token in x.split()]))
 
     def run_model(self):
         # Split into train and test datasets
@@ -74,19 +79,62 @@ class NaiveBayesClassifier:
         y_train = self.df_train[prediction_field]
         y_test = self.df_test[prediction_field]
 
+        day_test = self.df_200[text_field]
+        night_test = self.df_200[text_field]
+        day_y = self.df_200['Dag']
+        night_y = self.df_200['Natt']
+
+
         # Apply Naive Bayes
         if self.vectorization == 'count':
-            model = make_pipeline(CountVectorizer(ngram_range=(1,3), stop_words=self.stopwords), self.model)
+            model = make_pipeline(CountVectorizer(ngram_range=(1, 3), stop_words=self.stopwords), self.model)
         else:
             model = make_pipeline(TfidfVectorizer(stop_words=self.stopwords), self.model)
 
         model.fit(X_train, y_train)
         y_pred = model.predict(X_test)
+        day_pred = model.predict(day_test)
+        night_pred = model.predict(night_test)
 
         accuracy = self.accuracy.compute(references=y_test, predictions=y_pred)['accuracy']
         precision = self.precision.compute(references=y_test, predictions=y_pred)['precision']
         recall = self.recall.compute(references=y_test, predictions=y_pred)['recall']
         f1 = self.f1.compute(references=y_test, predictions=y_pred)['f1']
+
+
+        day_accuracy = self.accuracy.compute(references=day_y, predictions=day_pred)['accuracy']
+        day_precision = self.precision.compute(references=day_y, predictions=day_pred)['precision']
+        day_recall = self.recall.compute(references=day_y, predictions=day_pred)['recall']
+        day_f1 = self.f1.compute(references=day_y, predictions=day_pred)['f1']
+
+        night_accuracy = self.accuracy.compute(references=night_y, predictions=night_pred)['accuracy']
+        night_precision = self.precision.compute(references=night_y, predictions=night_pred)['precision']
+        night_recall = self.recall.compute(references=night_y, predictions=night_pred)['recall']
+        night_f1 = self.f1.compute(references=night_y, predictions=night_pred)['f1']
+
+
+        result_list.append(
+            {
+                "Model name": self.model,
+                "Note": category + self.dataset_train,
+                "Number removal": self.number_removal,
+                "Stemming": self.apply_stemming,
+                "Stopwords": self.apply_stopwords,
+                "Vectorization": self.vectorization,
+                "accuracy": accuracy,
+                "precision": precision,
+                "recall": recall,
+                "f1": f1,
+                "day_accuracy": day_accuracy,
+                "day_precision": day_precision,
+                "day_recall": day_recall,
+                "day_f1": day_f1,
+                "night_accuracy": night_accuracy,
+                "night_precision": night_precision,
+                "night_recall": night_recall,
+                "night_f1": night_f1,
+            }
+        )
 
         report = classification_report(y_test, y_pred)
         # print(report)
@@ -108,7 +156,7 @@ class NaiveBayesClassifier:
         variables = ["Model", "Train Dataset", "Number Removal", "Stemming", "Stopwords", "Vectorization", "Accuracy",
                      "Precision", "Recall", "F1"]
         values = [
-            [self.model, self.dataset_train, self.number_removal, self.apply_stemming, self.apply_stopwords,
+            [self.model, category + self.dataset_train, self.number_removal, self.apply_stemming, self.apply_stopwords,
              self.vectorization,
              accuracy, precision, recall, f1]]
 
@@ -136,21 +184,21 @@ class NaiveBayesClassifier:
 def run_combination(file_name, model=""):
     classifier = NaiveBayesClassifier(
         test_file,
-       file_name,
+        file_name,
         number_removal=False, apply_stemming=True,
         apply_stopwords=True, vectorization='count', model=model)
     classifier.main()
 
     classifier = NaiveBayesClassifier(
         test_file,
-       file_name,
+        file_name,
         number_removal=True, apply_stemming=True,
         apply_stopwords=True, vectorization='count', model=model)
     classifier.main()
 
     classifier = NaiveBayesClassifier(
         test_file,
-       file_name,
+        file_name,
         number_removal=False, apply_stemming=True,
         apply_stopwords=True, vectorization='tf-idf', model=model)
     classifier.main()
@@ -164,26 +212,56 @@ def run_combination(file_name, model=""):
 
     print("")
 
+
 if __name__ == '__main__':
-    path_to_data = "data/pipeline_runs/classification/"
+    result_list = []
+    category = "without_night"
+    path_to_data = f"data/pipeline_runs/classification/{category}/"
     test_file = f"{path_to_data}static_test.csv"
 
-    sampling_type = "no_night_100k_as_negative.csv"
+    sampling_type = "100k_as_negative.csv"
     night_100k = f"{path_to_data}{sampling_type}"
 
-    sampling_type = "no_night_after_2020_rest_90_percent.csv"
+    sampling_type = "after_2020_rest_90_percent.csv"
     rest_90 = f"{path_to_data}{sampling_type}"
 
-    sampling_type = "no_night_all_except_test.csv"
+    sampling_type = "all_except_test.csv"
     all_except = f"{path_to_data}{sampling_type}"
 
     run_combination(night_100k)
-    run_combination(night_100k,model="complementNB")
-
+    run_combination(night_100k, model="complementNB")
 
     run_combination(rest_90)
-    run_combination(rest_90,model="complementNB")
+    run_combination(rest_90, model="complementNB")
 
     run_combination(all_except)
-    run_combination(all_except,model="complementNB")
+    run_combination(all_except, model="complementNB")
 
+    category = "with_night"
+    path_to_data = f"data/pipeline_runs/classification/{category}/"
+    test_file = f"{path_to_data}static_test.csv"
+
+    sampling_type = "100k_as_negative.csv"
+    night_100k = f"{path_to_data}{sampling_type}"
+
+    sampling_type = "after_2020_rest_90_percent.csv"
+    rest_90 = f"{path_to_data}{sampling_type}"
+
+    sampling_type = "all_except_test.csv"
+    all_except = f"{path_to_data}{sampling_type}"
+
+    run_combination(night_100k)
+    run_combination(night_100k, model="complementNB")
+
+    run_combination(rest_90)
+    run_combination(rest_90, model="complementNB")
+
+    run_combination(all_except)
+    run_combination(all_except, model="complementNB")
+
+    res_df = pd.DataFrame(
+        result_list)
+
+    print(pd.DataFrame(
+        result_list).to_latex(
+        escape=True))
